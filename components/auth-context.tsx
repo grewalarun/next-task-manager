@@ -10,11 +10,14 @@ import {
 } from "react"
 import { useRouter } from "next/navigation"
 
-interface AuthUser {
+const API_BASE = process.env.NEXT_PUBLIC_API_URL;
+
+export interface AuthUser {
   id: string
   name: string
   email: string
   initials: string
+  token: string
 }
 
 interface AuthContextValue {
@@ -26,16 +29,6 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
-
-const DEMO_ACCOUNTS = [
-  { id: "u1", name: "Alex Morgan", email: "alex@taskflow.io", password: "password123", initials: "AM" },
-  { id: "u2", name: "Sam Chen", email: "sam@taskflow.io", password: "password123", initials: "SC" },
-  { id: "u3", name: "Jordan Lee", email: "jordan@taskflow.io", password: "password123", initials: "JL" },
-  { id: "u4", name: "Riley Kim", email: "riley@taskflow.io", password: "password123", initials: "RK" },
-  { id: "u5", name: "Taylor Swift", email: "taylor@taskflow.io", password: "password123", initials: "TS" },
-]
-
-let registeredAccounts: typeof DEMO_ACCOUNTS = [...DEMO_ACCOUNTS]
 
 function getInitials(name: string): string {
   return name
@@ -65,54 +58,84 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(
     async (email: string, password: string) => {
-      await new Promise((r) => setTimeout(r, 800))
-      const account = registeredAccounts.find(
-        (a) => a.email.toLowerCase() === email.toLowerCase() && a.password === password
-      )
-      if (!account) {
-        return { success: false, error: "Invalid email or password" }
+      try {
+        const res = await fetch(`${API_BASE}/auth/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        })
+
+        const data = await res.json()
+
+        if (!res.ok) {
+          return {
+            success: false,
+            error: data.message || data.error || "Invalid email or password",
+          }
+        }
+
+        const userData = data.user || data
+        const authUser: AuthUser = {
+          id: userData.id || userData._id || "",
+          name: userData.name || userData.fullName || email.split("@")[0],
+          email: userData.email || email,
+          initials: getInitials(userData.name || userData.fullName || email.split("@")[0]),
+          token: data.token || data.accessToken || "",
+        }
+
+        setUser(authUser)
+        sessionStorage.setItem("taskflow-user", JSON.stringify(authUser))
+        router.push("/")
+        return { success: true }
+      } catch (err) {
+        console.error("Login error:", err)
+        return {
+          success: false,
+          error: "Network error. Please check your connection and try again.",
+        }
       }
-      const authUser: AuthUser = {
-        id: account.id,
-        name: account.name,
-        email: account.email,
-        initials: account.initials,
-      }
-      setUser(authUser)
-      sessionStorage.setItem("taskflow-user", JSON.stringify(authUser))
-      router.push("/")
-      return { success: true }
     },
     [router]
   )
 
   const register = useCallback(
     async (name: string, email: string, password: string) => {
-      await new Promise((r) => setTimeout(r, 800))
-      const existing = registeredAccounts.find(
-        (a) => a.email.toLowerCase() === email.toLowerCase()
-      )
-      if (existing) {
-        return { success: false, error: "An account with this email already exists" }
+      try {
+        const res = await fetch(`${API_BASE}/auth/register`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, email, password }),
+        })
+
+        const data = await res.json()
+
+        if (!res.ok) {
+          return {
+            success: false,
+            error: data.message || data.error || "Registration failed",
+          }
+        }
+
+        const userData = data.user || data
+        const authUser: AuthUser = {
+          id: userData.id || userData._id || "",
+          name: userData.name || userData.fullName || name,
+          email: userData.email || email,
+          initials: getInitials(userData.name || userData.fullName || name),
+          token: data.token || data.accessToken || "",
+        }
+
+        setUser(authUser)
+        sessionStorage.setItem("taskflow-user", JSON.stringify(authUser))
+        router.push("/")
+        return { success: true }
+      } catch (err) {
+        console.error("Register error:", err)
+        return {
+          success: false,
+          error: "Network error. Please check your connection and try again.",
+        }
       }
-      const newAccount = {
-        id: `u${Date.now()}`,
-        name,
-        email,
-        password,
-        initials: getInitials(name),
-      }
-      registeredAccounts.push(newAccount)
-      const authUser: AuthUser = {
-        id: newAccount.id,
-        name: newAccount.name,
-        email: newAccount.email,
-        initials: newAccount.initials,
-      }
-      setUser(authUser)
-      sessionStorage.setItem("taskflow-user", JSON.stringify(authUser))
-      router.push("/")
-      return { success: true }
     },
     [router]
   )

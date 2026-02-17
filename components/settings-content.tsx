@@ -3,9 +3,26 @@
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { useEffect, useState } from "react"
+import { AuthUser } from "./auth-context"
 
 export function SettingsContent() {
+  const [loading, setIsLoading] = useState(true);
+  const [user, setUser] = useState<AuthUser|null>(null)
+
+ useEffect(() => {
+    const stored = sessionStorage.getItem("taskflow-user")
+    if (stored) {
+      try {
+        setUser(JSON.parse(stored))
+      } catch {
+        sessionStorage.removeItem("taskflow-user")
+      }
+    }
+    setIsLoading(false)
+  }, [])
   return (
+    !loading &&
     <div className="flex flex-col gap-8">
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-foreground text-balance">Settings</h1>
@@ -22,7 +39,7 @@ export function SettingsContent() {
         <div className="flex items-start gap-6">
           <Avatar className="h-16 w-16">
             <AvatarFallback className="bg-primary/10 text-lg font-semibold text-primary">
-              AM
+              {user&& user.initials}
             </AvatarFallback>
           </Avatar>
           <div className="flex flex-1 flex-col gap-4">
@@ -31,13 +48,13 @@ export function SettingsContent() {
                 <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
                   Full Name
                 </label>
-                <Input defaultValue="Alex Morgan" className="rounded-xl" />
+                <Input defaultValue={user ? user.name : ""} className="rounded-xl" />
               </div>
               <div>
                 <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
                   Email
                 </label>
-                <Input defaultValue="alex@taskflow.io" className="rounded-xl" />
+                <Input defaultValue={user ? user.email: ""} className="rounded-xl" />
               </div>
             </div>
             <div>

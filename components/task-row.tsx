@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { Pencil, Trash2, MoreHorizontal } from "lucide-react"
-import { type Task, getUser } from "@/lib/data"
+import { type Task } from "@/lib/data"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -12,6 +12,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { getInitials } from "@/lib/utils"
 
 const statusConfig: Record<string, { label: string; className: string }> = {
   todo: { label: "Todo", className: "bg-muted text-muted-foreground" },
@@ -19,31 +20,31 @@ const statusConfig: Record<string, { label: string; className: string }> = {
   done: { label: "Done", className: "bg-primary/15 text-primary" },
 }
 
-export function TaskRow({ task }: { task: Task }) {
-  const assignee = getUser(task.assignee)
+export function TaskRow({ task, project }: { task: Task, project: String }) {
+ 
   const status = statusConfig[task.status]
 
   return (
     <div className="group grid grid-cols-1 items-center gap-3 rounded-xl border border-border bg-card p-4 shadow-sm transition-shadow hover:shadow-md md:grid-cols-[1fr_160px_120px_100px] md:px-5">
       {/* Task Info */}
       <Link
-        href={`/projects/${task.projectId}/tasks/${task.id}`}
+        href={`/projects/${project}/tasks/${task._id}`}
         className="min-w-0"
       >
         <p className="font-medium text-foreground group-hover:text-primary transition-colors">
           {task.title}
         </p>
-        <p className="mt-0.5 text-xs text-muted-foreground">{task.id}</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">{task.description}</p>
       </Link>
 
       {/* Assigned To */}
       <div className="flex items-center gap-2">
         <Avatar className="h-7 w-7">
           <AvatarFallback className="bg-primary/10 text-[10px] font-semibold text-primary">
-            {assignee?.initials}
+            {getInitials(`${task.assignedTo.name}`) }
           </AvatarFallback>
         </Avatar>
-        <span className="text-sm text-foreground">{assignee?.name}</span>
+        <span className="text-sm text-foreground">{task.assignedTo.name}</span>
       </div>
 
       {/* Status */}
@@ -55,7 +56,7 @@ export function TaskRow({ task }: { task: Task }) {
 
       {/* Actions */}
       <div className="flex items-center justify-end gap-1">
-        <Link href={`/projects/${task.projectId}/tasks/${task.id}/edit`}>
+        <Link href={`/projects/${project}/tasks/${task._id}/edit`}>
           <Button
             variant="ghost"
             size="icon"
