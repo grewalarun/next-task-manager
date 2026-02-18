@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import {
   ListTodo,
@@ -22,12 +22,14 @@ import {
 } from "@/components/ui/select"
 import { TaskRow } from "@/components/task-row"
 import api from "@/lib/api"
+import { useToast } from "@/hooks/use-toast"
 
 export function ProjectDetail({ projectId }: { projectId: string }) {
   const [project, setProject] = useState<Project | null>(null)
   const [allTasks, setAllTasks] = useState<Task[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState<string>("all")
+  const { toast } = useToast()
 
   useEffect(() => {
     const fetchData = async () => {
@@ -43,21 +45,45 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
         setAllTasks(tasksRes.data)
       } catch (err) {
         console.error("Failed to fetch project data")
+        toast({
+          variant: "destructive",
+          title: "Failed to fetch project",
+          description: "Could not load project or tasks. Try again.",
+        })
       } finally {
         setIsLoading(false)
       }
     }
 
-    if (projectId) {
-      fetchData()
-    }
-  }, [projectId])
+    if (projectId) fetchData()
+  }, [projectId, toast])
 
-  // ✅ Memoized filtering
-  const filteredTasks = useMemo(() => {
-    if (statusFilter === "all") return allTasks
-    return allTasks.filter((t) => t.status === statusFilter)
-  }, [allTasks, statusFilter])
+  const handleDeleteTask = async (taskId: string) => {
+    const previousTasks = [...allTasks]
+
+    try {
+      // Optimistic UI remove
+      setAllTasks((prev) => prev.filter((t) => t._id !== taskId))
+
+      await api.delete(`/projects/${projectId}/tasks/${taskId}`)
+
+      toast({
+        variant:'success',
+        title: "Task deleted",
+        description: "The task has been removed successfully.",
+      })
+    } catch (err: any) {
+      // Rollback on failure
+      setAllTasks(previousTasks)
+      toast({
+        variant: "destructive",
+        title: "Failed to delete task",
+        description:
+          err?.response?.data?.message ||
+          "Something went wrong. Please try again.",
+      })
+    }
+  }
 
   if (isLoading) {
     return (
@@ -82,18 +108,8 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
   }
 
   const stats = [
-    {
-      label: "Total Tasks",
-      value: allTasks.length,
-      icon: ListTodo,
-      color: "text-accent",
-    },
-    {
-      label: "Members",
-      value: project.members.length,
-      icon: Users,
-      color: "text-secondary",
-    },
+    { label: "Total Tasks", value: allTasks.length, icon: ListTodo, color: "text-accent" },
+    { label: "Members", value: project.members.length, icon: Users, color: "text-secondary" },
     {
       label: "Created",
       value: new Date(project.createdAt).toLocaleDateString("en-US", {
@@ -105,6 +121,10 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
       color: "text-accent",
     },
   ]
+
+  const filteredTasks = statusFilter === "all"
+    ? allTasks
+    : allTasks.filter((t) => t.status === statusFilter)
 
   return (
     <div className="flex flex-col gap-8">
@@ -120,9 +140,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-foreground">{project.name}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {project.description}
-        </p>
+        <p className="mt-1 text-sm text-muted-foreground">{project.description}</p>
       </div>
 
       {/* Stats */}
@@ -147,15 +165,13 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
       <div className="flex flex-wrap items-center gap-3">
         <Link href={`/projects/${projectId}/tasks/new`}>
           <Button>
-            <Plus className="h-4 w-4" />
-            Create Task
+            <Plus className="h-4 w-4" /> Create Task
           </Button>
         </Link>
 
         <Link href={`/projects/${projectId}/members`}>
           <Button variant="outline">
-            <UserPlus className="h-4 w-4" />
-            Manage Members
+            <UserPlus className="h-4 w-4" /> Manage Members
           </Button>
         </Link>
 
@@ -179,13 +195,16 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
         {filteredTasks.length === 0 ? (
           <div className="flex flex-col items-center py-16">
             <ListTodo className="h-10 w-10 text-muted-foreground/40" />
-            <p className="mt-3 text-sm text-muted-foreground">
-              No tasks found
-            </p>
+            <p className="mt-3 text-sm text-muted-foreground">No tasks found</p>
           </div>
         ) : (
           filteredTasks.map((task) => (
-            <TaskRow key={task._id} task={task} project={projectId} />
+            <TaskRow
+              key={task._id}
+              task={task}
+              project={projectId}
+              onDeleted={handleDeleteTask} // toast messages integrated in parent
+            />
           ))
         )}
       </div>

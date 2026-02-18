@@ -41,7 +41,7 @@ export function TaskDetail({
   const [status, setStatus] = useState<TaskStatus | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isUpdating, setIsUpdating] = useState(false)
-  const Priority= "High"
+  
   useEffect(() => {
     const fetchTask = async () => {
       try {
@@ -107,7 +107,7 @@ export function TaskDetail({
     )
   }
 
-  const priority = priorityConfig["medium"]
+  const priority = priorityConfig[task.priority]
 
   return (
     <div className="flex flex-col gap-8">

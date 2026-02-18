@@ -131,11 +131,11 @@ export function getProjectMembers(projectId: string): User[] {
   return project.members.map((id) => getUser(id._id)).filter(Boolean) as User[]
 }
 
-// export function getNonProjectMembers(projectId: string): User[] {
-//   const project = getProject(projectId)
-//   if (!project) return []
-//   return users.filter((u) => !project.members.includes(u.id))
-// }
+export function getNonProjectMembers(projectId: string): User[] {
+  const project = getProject(projectId)
+  if (!project) return []
+  return users.filter((u) => !project.members.includes(u.id))
+}
 
 export function getAllMembers(): User[] {
   return users

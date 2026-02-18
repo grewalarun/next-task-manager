@@ -10,6 +10,7 @@ import {
   type Priority,
   getProject,
   getProjectMembers,
+  Project,
 } from "@/lib/data"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -23,34 +24,71 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import api from "@/lib/api"
+import { getProjectById } from "@/lib/project.service"
+import { useToast } from "@/hooks/use-toast"
 
 interface TaskFormProps {
   projectId: string
   taskId?: string
 }
 
+interface TaskFormState {
+  title: string
+  description: string
+  status: TaskStatus
+  priority: Priority
+  assignedTo: string
+  dueDate: string
+}
+
 export function TaskForm({ projectId, taskId }: TaskFormProps) {
   const router = useRouter()
-
-  const project = getProject(projectId)
-  const members = getProjectMembers(projectId)
-
-  const [task, setTask] = useState<Task | null>(null)
-  const [isLoading, setIsLoading] = useState(!!taskId)
-  const [submitted, setSubmitted] = useState(false)
+  const [project, setProject] = useState<Project | null>()
+  const isEditing = Boolean(taskId)
+  const [isLoading, setIsLoading] = useState(isEditing)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const { toast } = useToast();
 
-  // Form state
-  const [title, setTitle] = useState("")
-  const [description, setDescription] = useState("")
-  const [status, setStatus] = useState<TaskStatus>("todo")
-  const [priority, setPriority] = useState<Priority>("medium")
-  const [assignee, setAssignee] = useState<string>("")
-  const [dueDate, setDueDate] = useState("")
+  const [form, setForm] = useState<TaskFormState>({
+    title: "",
+    description: "",
+    status: "todo",
+    priority: "medium",
+    assignedTo: "",
+    dueDate: "",
+  })
 
-  const isEditing = !!taskId
+  /* ---------------------- */
+  /* Handle input changes   */
+  /* ---------------------- */
+  const updateField = useCallback(
+    <K extends keyof TaskFormState>(key: K, value: TaskFormState[K]) => {
+      setForm((prev) => ({ ...prev, [key]: value }))
+    },
+    []
+  )
 
-  // Fetch existing task if editing
+  /* ---------------------- */
+  /* Get Project by ProjectID  */
+  /* ---------------------- */
+
+  useEffect(() => {
+    const fetchProject = async () => {
+      try {
+        const data = await getProjectById(projectId)
+        setProject(data)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchProject()
+  }, [projectId])
+
+
+  /* ---------------------- */
+  /* Fetch task if editing  */
+  /* ---------------------- */
   useEffect(() => {
     if (!taskId) return
 
@@ -59,18 +97,28 @@ export function TaskForm({ projectId, taskId }: TaskFormProps) {
     const fetchTask = async () => {
       try {
         setIsLoading(true)
-        const res = await api.get<Task>(`/projects/${projectId}/tasks/${taskId}`, {
-          signal: controller.signal,
+
+        const res = await api.get<Task>(
+          `/projects/${projectId}/tasks/${taskId}`,
+          { signal: controller.signal }
+        )
+
+        const task = res.data
+
+        setForm({
+          title: task.title || "",
+          description: task.description || "",
+          status: task.status || "todo",
+          priority: task.priority || "medium",
+          assignedTo: task.assignedTo?._id || "",
+          dueDate: task.dueDate
+            ? new Date(task.dueDate).toISOString().split("T")[0]
+            : "",
         })
-        setTask(res.data)
-        setTitle(res.data.title || "")
-        setDescription(res.data.description || "")
-        setStatus(res.data.status || "todo")
-        setPriority(res.data.priority || "medium")
-        setAssignee(res.data.assignedTo?._id || "")
-        setDueDate(res.data.dueDate || "")
       } catch (err) {
-        if (!controller.signal.aborted) console.error("Failed to fetch task")
+        if (!controller.signal.aborted) {
+          console.error("Failed to fetch task")
+        }
       } finally {
         setIsLoading(false)
       }
@@ -80,129 +128,142 @@ export function TaskForm({ projectId, taskId }: TaskFormProps) {
     return () => controller.abort()
   }, [projectId, taskId])
 
-  // if (!project) {
-  //   return (
-  //     <div className="flex flex-col items-center justify-center py-20">
-  //       <p className="text-lg font-medium text-foreground">Project not found</p>
-  //       <Link href="/projects" className="mt-2 text-sm text-primary hover:underline">
-  //         Back to projects
-  //       </Link>
-  //     </div>
-  //   )
-  // }
-
+  /* ---------------------- */
+  /* Submit Handler         */
+  /* ---------------------- */
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault()
-      if (!title.trim()) return
+
+      if (!form.title.trim()) return
 
       try {
         setIsSubmitting(true)
 
-        // API call: create or update task
-        if (isEditing) {
-          await api.put(`/projects/${projectId}/tasks/${taskId}`, {
-            title,
-            description,
-            status,
-            priority,
-            assignedTo: assignee,
-            dueDate,
-          })
-        } else {
-          await api.post(`/projects/${projectId}/tasks`, {
-            title,
-            description,
-            status,
-            priority,
-            assignedTo: assignee,
-            dueDate,
-          })
+        const payload = {
+          ...form,
+          project: project?._id,
+          createdBy: project?.members[0]._id
+
         }
 
-        setSubmitted(true)
+        if (isEditing) {
+          await api.patch(
+            `/projects/${projectId}/tasks/${taskId}`,
+            payload
+          )
+        } else {
+          await api.post(
+            `/projects/${projectId}/tasks`,
+            payload
+          )
+        }
+        toast({
+          variant: "success",
+          title: "Action Success",
+          description: "Project updated successfully",
+        })
         router.push(`/projects/${projectId}`)
+        router.refresh()
       } catch (err) {
-        console.error("Failed to submit task")
+               toast({
+          variant: "destructive",
+          title: "Action failed",
+          description: "Failed to submit task",
+        })
+      
       } finally {
         setIsSubmitting(false)
       }
     },
-    [title, description, status, priority, assignee, dueDate, isEditing, projectId, taskId, router]
+    [form, isEditing, projectId, taskId, router]
   )
+
+  if (!project) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20">
+        <p className="text-lg font-medium text-foreground">
+          Project not found
+        </p>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col gap-8">
       {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-sm text-muted-foreground" aria-label="Breadcrumb">
-        <Link href="/" className="hover:text-foreground transition-colors">Dashboard</Link>
+      <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
+        <Link href="/">Dashboard</Link>
         <ChevronRight className="h-3.5 w-3.5" />
-        <Link href="/projects" className="hover:text-foreground transition-colors">Projects</Link>
+        <Link href="/projects">Projects</Link>
         <ChevronRight className="h-3.5 w-3.5" />
-        <Link href={`/projects/${projectId}`} className="hover:text-foreground transition-colors">{task?.project?.name}</Link>
+        <Link href={`/projects/${projectId}`}>{project.name}</Link>
         <ChevronRight className="h-3.5 w-3.5" />
-        <span className="font-medium text-foreground">{isEditing ? "Edit Task" : "Create Task"}</span>
+        <span className="font-medium text-foreground">
+          {isEditing ? "Edit Task" : "Create Task"}
+        </span>
       </nav>
 
-      {/* Back Link */}
-      <Link href={`/projects/${projectId}`} className="flex items-center gap-1.5 text-sm text-primary hover:underline w-fit">
+      {/* Back */}
+      <Link
+        href={`/projects/${projectId}`}
+        className="flex items-center gap-1.5 text-sm text-primary hover:underline w-fit"
+      >
         <ArrowLeft className="h-3.5 w-3.5" />
-        Back to {task?.project?.name}
+        Back to {project.name}
       </Link>
 
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground text-balance">
-          {isEditing ? `Edit Task: ${task?.title}` : "Create New Task"}
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground leading-relaxed">
-          {isEditing ? "Update the task details below." : `Add a new task to ${task?.project?.name}.`}
-        </p>
-      </div>
-
-      {/* Success message */}
-      {submitted && (
-        <div className="rounded-xl border border-primary/30 bg-primary/5 p-4">
-          <p className="text-sm font-medium text-primary">
-            {isEditing ? "Task updated successfully." : "Task created successfully."}
-          </p>
-        </div>
-      )}
-
-      {/* Loading skeleton */}
+      {/* Loading */}
       {isLoading ? (
-        <div className="rounded-xl border border-border bg-card p-6 shadow-sm animate-pulse">
-          <p className="text-muted-foreground">Loading task...</p>
+        <div className="rounded-xl border p-6 animate-pulse">
+          Loading task...
         </div>
       ) : (
         <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-          <div className="rounded-xl border border-border bg-card p-6 shadow-sm flex flex-col gap-5">
+          <div className="rounded-xl border bg-card p-6 shadow-sm flex flex-col gap-5">
+
             {/* Title */}
             <div className="flex flex-col gap-2">
-              <Label htmlFor="title" className="text-sm font-medium text-foreground">
-                Title <span className="text-secondary">*</span>
-              </Label>
-              <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Enter task title..." required className="rounded-xl" />
+              <Label>Title *</Label>
+              <Input
+                value={form.title}
+                onChange={(e) => updateField("title", e.target.value)}
+                required
+              />
             </div>
 
             {/* Description */}
             <div className="flex flex-col gap-2">
-              <Label htmlFor="description" className="text-sm font-medium text-foreground">Description</Label>
-              <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Describe the task in detail..." rows={5} className="min-h-[120px] rounded-xl" />
+              <Label>Description</Label>
+              <Textarea
+                rows={5}
+                value={form.description}
+                onChange={(e) =>
+                  updateField("description", e.target.value)
+                }
+              />
             </div>
 
-            {/* Two-column fields */}
+            {/* Grid Fields */}
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+
               {/* Status */}
               <div className="flex flex-col gap-2">
-                <Label htmlFor="status" className="text-sm font-medium text-foreground">Status</Label>
-                <Select value={status} onValueChange={(v) => setStatus(v as TaskStatus)}>
-                  <SelectTrigger id="status" className="rounded-xl">
-                    <SelectValue placeholder="Select status" />
+                <Label>Status</Label>
+                <Select
+                  value={form.status}
+                  onValueChange={(v) =>
+                    updateField("status", v as TaskStatus)
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="rounded-xl">
+                  <SelectContent>
                     <SelectItem value="todo">Todo</SelectItem>
-                    <SelectItem value="in-progress">In Progress</SelectItem>
+                    <SelectItem value="in-progress">
+                      In Progress
+                    </SelectItem>
                     <SelectItem value="done">Done</SelectItem>
                   </SelectContent>
                 </Select>
@@ -210,12 +271,17 @@ export function TaskForm({ projectId, taskId }: TaskFormProps) {
 
               {/* Priority */}
               <div className="flex flex-col gap-2">
-                <Label htmlFor="priority" className="text-sm font-medium text-foreground">Priority</Label>
-                <Select value={priority} onValueChange={(v) => setPriority(v as Priority)}>
-                  <SelectTrigger id="priority" className="rounded-xl">
-                    <SelectValue placeholder="Select priority" />
+                <Label>Priority</Label>
+                <Select
+                  value={form.priority}
+                  onValueChange={(v) =>
+                    updateField("priority", v as Priority)
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="rounded-xl">
+                  <SelectContent>
                     <SelectItem value="low">Low</SelectItem>
                     <SelectItem value="medium">Medium</SelectItem>
                     <SelectItem value="high">High</SelectItem>
@@ -226,14 +292,21 @@ export function TaskForm({ projectId, taskId }: TaskFormProps) {
 
               {/* Assignee */}
               <div className="flex flex-col gap-2">
-                <Label htmlFor="assignee" className="text-sm font-medium text-foreground">Assignee</Label>
-                <Select value={assignee} onValueChange={setAssignee}>
-                  <SelectTrigger id="assignee" className="rounded-xl">
+                <Label>Assignee</Label>
+                <Select
+                  value={form.assignedTo}
+                  onValueChange={(v) =>
+                    updateField("assignedTo", v)
+                  }
+                >
+                  <SelectTrigger>
                     <SelectValue placeholder="Select assignee" />
                   </SelectTrigger>
-                  <SelectContent className="rounded-xl">
-                    {members.map((m) => (
-                      <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                  <SelectContent>
+                    {project.members.map((m) => (
+                      <SelectItem key={m._id} value={m._id}>
+                        {m.name}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -241,19 +314,36 @@ export function TaskForm({ projectId, taskId }: TaskFormProps) {
 
               {/* Due Date */}
               <div className="flex flex-col gap-2">
-                <Label htmlFor="dueDate" className="text-sm font-medium text-foreground">Due Date</Label>
-                <Input id="dueDate" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="rounded-xl" />
+                <Label>Due Date</Label>
+                <Input
+                  type="date"
+                  value={form.dueDate}
+                  onChange={(e) =>
+                    updateField("dueDate", e.target.value)
+                  }
+                />
               </div>
+
             </div>
           </div>
 
           {/* Actions */}
           <div className="flex items-center gap-3">
-            <Button type="submit" className="rounded-xl bg-primary text-primary-foreground hover:bg-primary/90" disabled={!title.trim() || isSubmitting}>
-              {isEditing ? "Save Changes" : "Create Task"}
+            <Button
+              type="submit"
+              disabled={!form.title.trim() || isSubmitting}
+            >
+              {isSubmitting
+                ? "Saving..."
+                : isEditing
+                  ? "Save Changes"
+                  : "Create Task"}
             </Button>
+
             <Link href={`/projects/${projectId}`}>
-              <Button type="button" variant="outline" className="rounded-xl">Cancel</Button>
+              <Button type="button" variant="outline">
+                Cancel
+              </Button>
             </Link>
           </div>
         </form>
