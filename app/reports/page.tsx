@@ -1,10 +1,11 @@
 import { DashboardShell } from "@/components/dashboard-shell"
-import { ReportsContent } from "@/components/reports-content"
+// import { ReportsContent } from "@/components/reports-content"
 
 export default function ReportsPage() {
   return (
     <DashboardShell>
-      <ReportsContent />
+      <h1>Work in progress</h1>
+      {/* <ReportsContent /> */}
     </DashboardShell>
   )
 }
