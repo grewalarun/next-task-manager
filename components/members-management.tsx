@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react"
 import { Shield, Users } from "lucide-react"
 import api from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
-
+import { useAuth, usePermission } from "@/components/auth-context"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -14,6 +14,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+
+
 
 type MemberRole = "admin" | "manager" | "member" | "viewer"
 
@@ -45,12 +47,16 @@ const roleBadgeStyle: Record<MemberRole, string> = {
   viewer: "bg-muted text-muted-foreground",
 }
 
-const allRoles: MemberRole[] = ["admin","member"]
+const allRoles: MemberRole[] = ["manager","member"]
 
 export function MembersManagement() {
+  
   const [members, setMembers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null)
+
+  const {user} = useAuth();
+  const managemember = usePermission(["member.manage"]);
 
   const { toast } = useToast()
 
@@ -134,7 +140,7 @@ const handleRoleChange = useCallback(
 
   return (
     <div className="flex flex-col gap-8">
-
+   
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold tracking-tight">
@@ -155,6 +161,15 @@ const handleRoleChange = useCallback(
         </div>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="flex flex-col gap-1.5 rounded-xl bg-muted/50 p-4">
+              <Badge className={`bg-secondary/15 text-secondary border-0 text-[11px] font-medium w-fit`}
+              >
+                Admin
+              </Badge>
+              <p className="text-xs text-muted-foreground">
+               Full access to manage workspace and members. Create Project and Tasks
+              </p>
+            </div>
           {allRoles.map((role) => (
             <div
               key={role}
@@ -172,8 +187,9 @@ const handleRoleChange = useCallback(
           ))}
         </div>
       </div>
-
-      {/* Members List */}
+       {/* Members List */}
+      {managemember ?
+     
       <div className="flex flex-col gap-4">
         <div className="flex items-center gap-2">
           <Users className="h-4 w-4 text-primary" />
@@ -213,6 +229,7 @@ const handleRoleChange = useCallback(
               </Badge>
 
               {/* Role Select */}
+              {user?.role!== member.role &&
               <Select
                 value={member.role}
                 onValueChange={(v) =>
@@ -231,10 +248,13 @@ const handleRoleChange = useCallback(
                   ))}
                 </SelectContent>
               </Select>
+}
             </div>
           ))}
         </div>
-      </div>
+      </div>:
+      <p>You are not authorised to manage members</p>
+}
     </div>
   )
 }

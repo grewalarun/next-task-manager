@@ -3,13 +3,11 @@
 import { useEffect, useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, ChevronRight } from "lucide-react"
+import { ArrowLeft, ChevronRight, Loader2 } from "lucide-react"
 import {
   type Task,
   type TaskStatus,
   type Priority,
-  getProject,
-  getProjectMembers,
   Project,
 } from "@/lib/data"
 import { Button } from "@/components/ui/button"
@@ -43,9 +41,11 @@ interface TaskFormState {
 
 export function TaskForm({ projectId, taskId }: TaskFormProps) {
   const router = useRouter()
-  const [project, setProject] = useState<Project | null>()
+  const [project, setProject] = useState<Project | null>(null)
   const isEditing = Boolean(taskId)
-  const [isLoading, setIsLoading] = useState(isEditing)
+  const [isProjectLoading, setIsProjectLoading] = useState(true)
+  const [isTaskLoading, setIsTaskLoading] = useState(isEditing)
+
   const [isSubmitting, setIsSubmitting] = useState(false)
   const { toast } = useToast();
 
@@ -68,65 +68,53 @@ export function TaskForm({ projectId, taskId }: TaskFormProps) {
     []
   )
 
-  /* ---------------------- */
-  /* Get Project by ProjectID  */
-  /* ---------------------- */
-
-  useEffect(() => {
-    const fetchProject = async () => {
-      try {
-        const data = await getProjectById(projectId)
-        setProject(data)
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    fetchProject()
-  }, [projectId])
-
 
   /* ---------------------- */
   /* Fetch task if editing  */
   /* ---------------------- */
-  useEffect(() => {
-    if (!taskId) return
+ 
+useEffect(() => {
+  const load = async () => {
+    try {
+      setIsProjectLoading(true)
+      setIsTaskLoading(isEditing)
 
-    const controller = new AbortController()
+      const projectPromise = getProjectById(projectId)
 
-    const fetchTask = async () => {
-      try {
-        setIsLoading(true)
+      const taskPromise = isEditing
+        ? api.get(`/projects/${projectId}/tasks/${taskId}`)
+        : Promise.resolve(null)
 
-        const res = await api.get<Task>(
-          `/projects/${projectId}/tasks/${taskId}`,
-          { signal: controller.signal }
-        )
+      const [projectData, task] = await Promise.all([
+        projectPromise,
+        taskPromise,
+      ])
 
-        const task = res.data
+      setProject(projectData)
 
-        setForm({
-          title: task.title || "",
-          description: task.description || "",
-          status: task.status || "todo",
-          priority: task.priority || "medium",
-          assignedTo: task.assignedTo?._id || "",
-          dueDate: task.dueDate
-            ? new Date(task.dueDate).toISOString().split("T")[0]
+      if (task) {
+       setForm({
+          title: task.data.title || "",
+          description: task.data.description || "",
+          status: task.data.status || "todo",
+          priority: task.data.priority || "medium",
+          assignedTo: task.data.assignedTo?._id || "",
+          dueDate: task.data.dueDate
+            ? new Date(task.data.dueDate).toISOString().split("T")[0]
             : "",
         })
-      } catch (err) {
-        if (!controller.signal.aborted) {
-          console.error("Failed to fetch task")
-        }
-      } finally {
-        setIsLoading(false)
       }
-    }
 
-    fetchTask()
-    return () => controller.abort()
-  }, [projectId, taskId])
+    } finally {
+      setIsProjectLoading(false)
+      setIsTaskLoading(false)
+    }
+  }
+
+  load()
+}, [projectId, taskId])
+
+const isLoading = isProjectLoading || isTaskLoading
 
   /* ---------------------- */
   /* Submit Handler         */
@@ -142,9 +130,7 @@ export function TaskForm({ projectId, taskId }: TaskFormProps) {
 
         const payload = {
           ...form,
-          project: project?._id,
-          createdBy: project?.members[0]._id
-
+          project: project?._id
         }
 
         if (isEditing) {
@@ -178,8 +164,15 @@ export function TaskForm({ projectId, taskId }: TaskFormProps) {
     },
     [form, isEditing, projectId, taskId, router]
   )
-
-  if (!project) {
+  if (isLoading) {
+    return (
+      <div className="flex justify-center py-20">
+        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+        
+      </div>
+    )
+  }
+if (!isProjectLoading && !project) {
     return (
       <div className="flex flex-col items-center justify-center py-20">
         <p className="text-lg font-medium text-foreground">
@@ -197,7 +190,7 @@ export function TaskForm({ projectId, taskId }: TaskFormProps) {
         <ChevronRight className="h-3.5 w-3.5" />
         <Link href="/projects">Projects</Link>
         <ChevronRight className="h-3.5 w-3.5" />
-        <Link href={`/projects/${projectId}`}>{project.name}</Link>
+        <Link href={`/projects/${projectId}`}>{project?.name}</Link>
         <ChevronRight className="h-3.5 w-3.5" />
         <span className="font-medium text-foreground">
           {isEditing ? "Edit Task" : "Create Task"}
@@ -210,7 +203,7 @@ export function TaskForm({ projectId, taskId }: TaskFormProps) {
         className="flex items-center gap-1.5 text-sm text-primary hover:underline w-fit"
       >
         <ArrowLeft className="h-3.5 w-3.5" />
-        Back to {project.name}
+        Back to {project?.name}
       </Link>
 
       {/* Loading */}
@@ -303,7 +296,7 @@ export function TaskForm({ projectId, taskId }: TaskFormProps) {
                     <SelectValue placeholder="Select assignee" />
                   </SelectTrigger>
                   <SelectContent>
-                    {project.members.map((m) => (
+                    {project?.members?.map((m) => (
                       <SelectItem key={m._id} value={m._id}>
                         {m.name}
                       </SelectItem>

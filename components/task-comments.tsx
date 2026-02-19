@@ -1,15 +1,19 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
-import { Send } from "lucide-react"
+import { MessageCirclePlus, Send } from "lucide-react"
 import { type Task, type Comment } from "@/lib/data"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Input } from "@/components/ui/input"
 import api from "@/lib/api"
 import { getInitials } from "@/lib/utils"
+import { comment } from "postcss"
 
-function formatCommentDate(dateStr: string) {
+function formatCommentDate(dateStr?: string) {
+  if (!dateStr) return "Just now"
+  const date = new Date(dateStr)
+  if (isNaN(date.getTime())) return "Just now"
   return new Date(dateStr).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
@@ -23,14 +27,14 @@ function CommentItem({ comment }: { comment: Comment }) {
     <div className="flex gap-3">
       <Avatar className="h-8 w-8 shrink-0">
         <AvatarFallback className="bg-primary/10 text-[10px] font-semibold text-primary">
-          {getInitials(comment.createdBy.name)}
+        {getInitials(comment.createdBy?.name || "User")}
         </AvatarFallback>
       </Avatar>
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-foreground">
-            {comment.createdBy.name}
+            {comment.createdBy?.name || "User"}
           </span>
           <span className="text-xs text-muted-foreground">
             {formatCommentDate(comment.createdAt)}
@@ -142,7 +146,7 @@ export function TaskComments({
       <div className="mt-6 flex items-center gap-3 border-t border-border pt-5">
         <Avatar className="h-8 w-8 shrink-0">
           <AvatarFallback className="bg-primary/10 text-[10px] font-semibold text-primary">
-            AM
+           <MessageCirclePlus />
           </AvatarFallback>
         </Avatar>
 

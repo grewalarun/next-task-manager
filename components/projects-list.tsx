@@ -9,11 +9,12 @@ import api from "@/lib/api"
 import { getInitials } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Plus } from "lucide-react"
+import { usePermission } from "./auth-context"
 
 export function ProjectsList() {
   const [projects, setProjects] = useState<Project[]>([])
   const [isLoading, setIsLoading] = useState(true)
-
+  const manageproject = usePermission(["project.delete", "project.edit"]);
   useEffect(() => {
     const fetchProjects = async () => {
       try {
@@ -58,19 +59,20 @@ export function ProjectsList() {
       Manage and track all your team projects in one place.
     </p>
   </div>
-
+{manageproject&&
   <Link href="/projects/new">
     <Button className="rounded-xl">
       <Plus className="mr-1.5 h-4 w-4" />
       Add Project
     </Button>
   </Link>
+}
 </div>
 
 
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
         {projects.map((project) => {
-          const total = project.taskCount ?? 0
+          const total = project.taskStat.total ?? 0
           const completed = 1 //project.completedTaskCount ?? 0
           const progressPercent =
             total > 0 ? Math.round((completed / total) * 100) : 0

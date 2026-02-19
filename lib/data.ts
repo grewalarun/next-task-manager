@@ -38,8 +38,12 @@ export interface Project {
   description: string
   createdAt: Date | any
   members: [{  _id: string, name: string, email: string}]
-  tasks: string[]
-  taskCount: number
+  taskStat: {
+    todo: number
+    "in-progress": number
+    done: number
+    total: number
+  }
 }
 
 export interface Comment {
@@ -92,18 +96,7 @@ export const tasks: Task[] = [
   }
 ]
 
-export const projects: Project[] = [
-  {
-    _id: "p1",
-    name: "TaskFlow Core",
-    description: "Core platform features including the task management engine, real-time collaboration, and workspace configuration.",
-    createdAt: "2026-01-01",
-    members: [{_id: "a", name: "a", email:"ss"}],
-    tasks: ["TF-101", "TF-102", "TF-103", "TF-104", "TF-105"],
-    taskCount: 0
-  },
- 
-]
+
 
 export function getUser(id: string): User | undefined {
   return users.find((u) => u.id === id)
@@ -113,29 +106,11 @@ export function getTask(id: string): Task | undefined {
   return tasks.find((t) => t._id === id)
 }
 
-export function getProject(id: string): Project | undefined {
-  return projects.find((p) => p._id === id)
-}
-
-export function getProjectTasks(projectId: string): Task[] {
-  return tasks.filter((t) => t.projectId === projectId)
-}
 
 export function getTasksByStatus(projectId: string, status: TaskStatus): Task[] {
   return tasks.filter((t) => t.projectId === projectId && t.status === status)
 }
 
-export function getProjectMembers(projectId: string): User[] {
-  const project = getProject(projectId)
-  if (!project) return []
-  return project.members.map((id) => getUser(id._id)).filter(Boolean) as User[]
-}
-
-export function getNonProjectMembers(projectId: string): User[] {
-  const project = getProject(projectId)
-  if (!project) return []
-  return users.filter((u) => !project.members.includes(u.id))
-}
 
 export function getAllMembers(): User[] {
   return users

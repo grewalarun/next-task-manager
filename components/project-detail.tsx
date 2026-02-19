@@ -1,6 +1,11 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import {
+  useEffect,
+  useState,
+  useMemo,
+  useCallback,
+} from "react"
 import Link from "next/link"
 import {
   ListTodo,
@@ -8,11 +13,14 @@ import {
   CalendarDays,
   Plus,
   UserPlus,
-  ChevronRight,
   Loader2,
+  Trash,
+  Pencil,
 } from "lucide-react"
+
 import { Project, Task } from "@/lib/data"
 import { Button } from "@/components/ui/button"
+import { useRouter } from "next/navigation"
 import {
   Select,
   SelectContent,
@@ -20,127 +28,270 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogFooter,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from "@/components/ui/alert-dialog"
 import { TaskRow } from "@/components/task-row"
 import api from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
+import { useAuth, usePermission } from "./auth-context"
+
+
+type Status = "idle" | "loading" | "success" | "error"
+
+
 
 export function ProjectDetail({ projectId }: { projectId: string }) {
+
+
+  const [status, setStatus] = useState<Status>("idle")
   const [project, setProject] = useState<Project | null>(null)
-  const [allTasks, setAllTasks] = useState<Task[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [statusFilter, setStatusFilter] = useState<string>("all")
+  const [tasks, setTasks] = useState<Task[]>([])
+  const [loading, setLoading] = useState(true)
+  const [statusFilter, setStatusFilter] = useState("all")
+  const [isDeletingProject, setIsDeletingProject] = useState(false)
+
   const { toast } = useToast()
+  const router = useRouter()
+  const { isLoading: isAuthLoading } = useAuth()
+  const manageProject = usePermission(["project.edit", "project.delete"])
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setIsLoading(true)
+  // ==============================
+  // DATA FETCH
+  // ==============================
 
-        const [projectRes, tasksRes] = await Promise.all([
-          api.get<Project>(`/projects/${projectId}`),
-          api.get<Task[]>(`/projects/${projectId}/tasks`),
-        ])
+useEffect(() => {
+  if (!projectId) return
 
-        setProject(projectRes.data)
-        setAllTasks(tasksRes.data)
-      } catch (err) {
-        console.error("Failed to fetch project data")
-        toast({
-          variant: "destructive",
-          title: "Failed to fetch project",
-          description: "Could not load project or tasks. Try again.",
-        })
-      } finally {
-        setIsLoading(false)
+  const controller = new AbortController()
+
+  const fetchData = async () => {
+    try {
+      setStatus("loading")
+
+      const [projectRes, tasksRes] = await Promise.all([
+        api.get<Project>(`/projects/${projectId}`, {
+          signal: controller.signal,
+        }),
+        api.get<Task[]>(`/projects/${projectId}/tasks`, {
+          signal: controller.signal,
+        }),
+      ])
+
+      setProject(projectRes.data)
+      setTasks(tasksRes.data)
+      setStatus("success")
+    } catch (err: any) {
+      if (err.name === "CanceledError") return
+
+      if (err.response?.status === 404) {
+        setStatus("error")   // Not found
+      } else {
+        setStatus("error")   // Server error
       }
     }
+  }
 
-    if (projectId) fetchData()
-  }, [projectId, toast])
+  fetchData()
 
-  const handleDeleteTask = async (taskId: string) => {
-    const previousTasks = [...allTasks]
+  return () => controller.abort()
+}, [projectId])
+
+  // ==============================
+  // MEMOIZED VALUES
+  // ==============================
+
+  const filteredTasks = useMemo(() => {
+    if (statusFilter === "all") return tasks
+    return tasks.filter((t) => t.status === statusFilter)
+  }, [tasks, statusFilter])
+
+  const stats = useMemo(() => {
+    if (!project) return []
+
+    return [
+      {
+        label: "Total Tasks",
+        value: tasks.length,
+        icon: ListTodo,
+        color: "text-accent",
+      },
+      {
+        label: "Members",
+        value: project.members.length,
+        icon: Users,
+        color: "text-secondary",
+      },
+      {
+        label: "Created",
+        value: new Date(project.createdAt).toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        }),
+        icon: CalendarDays,
+        color: "text-accent",
+      },
+    ]
+  }, [tasks.length, project])
+
+  // ==============================
+  // HANDLERS
+  // ==============================
+
+  const handleDeleteProject = useCallback(async () => {
+    if (!project) return
 
     try {
-      // Optimistic UI remove
-      setAllTasks((prev) => prev.filter((t) => t._id !== taskId))
+      setIsDeletingProject(true)
 
-      await api.delete(`/projects/${projectId}/tasks/${taskId}`)
+      await api.delete(`/projects/${projectId}`)
 
       toast({
-        variant:'success',
-        title: "Task deleted",
-        description: "The task has been removed successfully.",
+        variant: "success",
+        title: "Project deleted",
+        description: "The project has been removed successfully.",
       })
+
+      router.push("/projects")
+      router.refresh()
     } catch (err: any) {
-      // Rollback on failure
-      setAllTasks(previousTasks)
       toast({
         variant: "destructive",
-        title: "Failed to delete task",
+        title: "Failed to delete project",
         description:
           err?.response?.data?.message ||
           "Something went wrong. Please try again.",
       })
+    } finally {
+      setIsDeletingProject(false)
     }
-  }
+  }, [project, projectId, router, toast])
 
-  if (isLoading) {
+  const handleDeleteTask = useCallback(
+    async (taskId: string) => {
+      const previous = tasks
+
+      // Optimistic update
+      setTasks((prev) => prev.filter((t) => t._id !== taskId))
+
+      try {
+        await api.delete(`/projects/${projectId}/tasks/${taskId}`)
+
+        toast({
+          variant: "success",
+          title: "Task deleted",
+          description: "The task has been removed successfully.",
+        })
+      } catch (err: any) {
+        setTasks(previous) // rollback
+
+        toast({
+          variant: "destructive",
+          title: "Failed to delete task",
+          description:
+            err?.response?.data?.message ||
+            "Something went wrong. Please try again.",
+        })
+      }
+    },
+    [tasks, projectId, toast]
+  )
+
+  // ==============================
+  // LOADING STATES
+  // ==============================
+
+if (isAuthLoading || status === "loading" || status === "idle")  {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <p className="text-sm text-muted-foreground">Loading...</p>
-        </div>
+      <div className="flex justify-center py-20">
+        <Loader2 className="h-6 w-6 animate-spin text-primary" />
       </div>
     )
   }
 
-  if (!project) {
+if (status === "error") {
     return (
-      <div className="flex flex-col items-center justify-center py-20">
-        <p className="text-lg font-medium text-foreground">Project not found</p>
-        <Link href="/projects" className="mt-2 text-sm text-primary hover:underline">
+      <div className="flex flex-col items-center py-20">
+        <p className="text-lg font-medium">Project not found</p>
+        <Link
+          href="/projects"
+          className="mt-2 text-sm text-primary hover:underline"
+        >
           Back to projects
         </Link>
       </div>
     )
   }
 
-  const stats = [
-    { label: "Total Tasks", value: allTasks.length, icon: ListTodo, color: "text-accent" },
-    { label: "Members", value: project.members.length, icon: Users, color: "text-secondary" },
-    {
-      label: "Created",
-      value: new Date(project.createdAt).toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      }),
-      icon: CalendarDays,
-      color: "text-accent",
-    },
-  ]
-
-  const filteredTasks = statusFilter === "all"
-    ? allTasks
-    : allTasks.filter((t) => t.status === statusFilter)
+  // ==============================
+  // RENDER
+  // ==============================
 
   return (
     <div className="flex flex-col gap-8">
-      {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
-        <Link href="/">Dashboard</Link>
-        <ChevronRight className="h-3.5 w-3.5" />
-        <Link href="/projects">Projects</Link>
-        <ChevronRight className="h-3.5 w-3.5" />
-        <span className="font-medium text-foreground">{project.name}</span>
-      </nav>
 
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">{project.name}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">{project.description}</p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">{project?.name}</h1>
+          <p className="text-muted-foreground">
+            {project?.description}
+          </p>
+        </div>
+
+        {manageProject && (
+          <div className="flex gap-2">
+            <Link href={`/projects/${projectId}/edit`}>
+              <Button>
+                <Pencil className="mr-1.5 h-4 w-4" />
+                Edit
+              </Button>
+            </Link>
+
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="destructive"
+                  disabled={isDeletingProject}
+                >
+                  <Trash className="mr-1.5 h-4 w-4" />
+                  {isDeletingProject ? "Deleting..." : "Delete"}
+                </Button>
+              </AlertDialogTrigger>
+
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>
+                    Delete Project?
+                  </AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+
+                <AlertDialogFooter>
+                  <AlertDialogCancel>
+                    Cancel
+                  </AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleDeleteProject}
+                  >
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        )}
       </div>
 
       {/* Stats */}
@@ -148,14 +299,14 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
         {stats.map((stat) => (
           <div
             key={stat.label}
-            className="flex items-center gap-4 rounded-xl border border-border bg-card p-4 shadow-sm"
+            className="flex items-center gap-4 rounded-xl border p-4"
           >
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent/10">
-              <stat.icon className={`h-5 w-5 ${stat.color}`} />
-            </div>
+            <stat.icon className={`h-5 w-5 ${stat.color}`} />
             <div>
-              <p className="text-lg font-bold text-foreground">{stat.value}</p>
-              <p className="text-xs text-muted-foreground">{stat.label}</p>
+              <p className="text-lg font-bold">{stat.value}</p>
+              <p className="text-xs text-muted-foreground">
+                {stat.label}
+              </p>
             </div>
           </div>
         ))}
@@ -193,9 +344,8 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
       {/* Tasks */}
       <div className="flex flex-col gap-2">
         {filteredTasks.length === 0 ? (
-          <div className="flex flex-col items-center py-16">
-            <ListTodo className="h-10 w-10 text-muted-foreground/40" />
-            <p className="mt-3 text-sm text-muted-foreground">No tasks found</p>
+          <div className="text-center py-16 text-muted-foreground">
+            No tasks found
           </div>
         ) : (
           filteredTasks.map((task) => (
@@ -203,7 +353,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
               key={task._id}
               task={task}
               project={projectId}
-              onDeleted={handleDeleteTask} // toast messages integrated in parent
+              onDeleted={handleDeleteTask}
             />
           ))
         )}
