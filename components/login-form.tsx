@@ -130,14 +130,14 @@ export function LoginForm() {
             </Button>
           </form>
 
-          <div className="mt-6 rounded-lg border border-border bg-muted/50 p-4">
+          {/* <div className="mt-6 rounded-lg border border-border bg-muted/50 p-4">
             <p className="text-xs font-medium text-muted-foreground mb-2">Demo credentials</p>
             <p className="text-xs text-muted-foreground">
               <span className="font-mono text-foreground">alex@taskflow.io</span>
               {" / "}
               <span className="font-mono text-foreground">password123</span>
             </p>
-          </div>
+          </div> */}
 
           <p className="mt-6 text-center text-sm text-muted-foreground">
             {"Don't have an account? "}
