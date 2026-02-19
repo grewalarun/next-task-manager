@@ -73,7 +73,7 @@ export function ProjectsList() {
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
         {projects.map((project) => {
           const total = project.taskStat.total ?? 0
-          const completed = 1 //project.completedTaskCount ?? 0
+          const completed = project.taskStat.done ?? 0
           const progressPercent =
             total > 0 ? Math.round((completed / total) * 100) : 0
 
