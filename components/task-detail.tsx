@@ -1,13 +1,13 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import {
   ChevronRight,
   ArrowLeft,
-  CalendarDays,
-  Clock,
   Loader2,
+  Pencil,
+  Trash2,
 } from "lucide-react"
 import { type Task, TaskStatus } from "@/lib/data"
 import { Badge } from "@/components/ui/badge"
@@ -19,9 +19,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogFooter,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from "@/components/ui/alert-dialog"
 import { TaskComments } from "@/components/task-comments"
 import api from "@/lib/api"
 import { getInitials } from "@/lib/utils"
+import { Button } from "./ui/button"
+import { useToast } from "@/hooks/use-toast"
+import { useRouter } from "next/navigation"
 
 const priorityConfig: Record<string, { label: string; className: string }> = {
   low: { label: "Low", className: "bg-muted text-muted-foreground" },
@@ -41,7 +55,11 @@ export function TaskDetail({
   const [status, setStatus] = useState<TaskStatus | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isUpdating, setIsUpdating] = useState(false)
-  
+  const [deleting, setDeleting] = useState(false)
+  const { toast } = useToast();
+  const router = useRouter();
+
+
   useEffect(() => {
     const fetchTask = async () => {
       try {
@@ -82,6 +100,35 @@ export function TaskDetail({
       setIsUpdating(false)
     }
   }
+
+  const handleDeleteTask = useCallback(
+    async () => {
+
+      try {
+        await api.delete(`/projects/${projectId}/tasks/${taskId}`)
+
+        toast({
+          variant: "success",
+          title: "Task deleted",
+          description: "The task has been removed successfully.",
+        })
+        router.push("/projects")
+        router.refresh()
+      } catch (err: any) {
+
+        // rollback
+
+        toast({
+          variant: "destructive",
+          title: "Failed to delete task",
+          description:
+            err?.response?.data?.message ||
+            "Something went wrong. Please try again.",
+        })
+      }
+    },
+    [projectId, toast]
+  )
 
   if (isLoading) {
     return (
@@ -136,13 +183,65 @@ export function TaskDetail({
       </Link>
 
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">
-          {task.title}
-        </h1>
-        <p className="mt-1 text-xs text-muted-foreground">
-          {task._id}
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">
+            {task.title}
+          </h1>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {task._id}
+          </p>
+        </div>
+
+        <div className="flex gap-2">
+          <Link href={`/projects/${projectId}/tasks/${task._id}/edit`}>
+            <Button>
+              <Pencil className="mr-1.5 h-4 w-4" />
+              Edit
+            </Button>
+          </Link>
+
+
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+               <Button
+                  variant="destructive"
+                  disabled={deleting}
+                >
+                  <Trash2 className="mr-1.5 h-4 w-4" />
+                  {deleting ? "Deleting..." : "Delete"}
+                </Button>
+            </AlertDialogTrigger>
+
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  Delete Task?
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  This action cannot be undone. This will permanently delete{" "}
+                  <span className="font-medium">{task.title}</span>.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={deleting}>
+                  Cancel
+                </AlertDialogCancel>
+
+                <AlertDialogAction
+                  onClick={handleDeleteTask}
+                  disabled={deleting}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  {deleting ? "Deleting..." : "Delete"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
+        </div>
+
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
@@ -204,6 +303,29 @@ export function TaskDetail({
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {task.assignedTo.email}
+                </p>
+              </div>
+            </div>
+          </div>
+
+
+          {/* Assigned */}
+          <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Created By
+            </h3>
+            <div className="flex items-center gap-3">
+              <Avatar className="h-9 w-9">
+                <AvatarFallback>
+                  {getInitials(`${task.createdBy?.name}`)}
+                </AvatarFallback>
+              </Avatar>
+              <div>
+                <p className="text-sm font-medium">
+                  {task.createdBy?.name}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {task.createdBy?.email}
                 </p>
               </div>
             </div>

@@ -55,7 +55,6 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
   const [status, setStatus] = useState<Status>("idle")
   const [project, setProject] = useState<Project | null>(null)
   const [tasks, setTasks] = useState<Task[]>([])
-  const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState("all")
   const [isDeletingProject, setIsDeletingProject] = useState(false)
 
@@ -68,42 +67,42 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
   // DATA FETCH
   // ==============================
 
-useEffect(() => {
-  if (!projectId) return
+  useEffect(() => {
+    if (!projectId) return
 
-  const controller = new AbortController()
+    const controller = new AbortController()
 
-  const fetchData = async () => {
-    try {
-      setStatus("loading")
+    const fetchData = async () => {
+      try {
+        setStatus("loading")
 
-      const [projectRes, tasksRes] = await Promise.all([
-        api.get<Project>(`/projects/${projectId}`, {
-          signal: controller.signal,
-        }),
-        api.get<Task[]>(`/projects/${projectId}/tasks`, {
-          signal: controller.signal,
-        }),
-      ])
+        const [projectRes, tasksRes] = await Promise.all([
+          api.get<Project>(`/projects/${projectId}`, {
+            signal: controller.signal,
+          }),
+          api.get<Task[]>(`/projects/${projectId}/tasks`, {
+            signal: controller.signal,
+          }),
+        ])
 
-      setProject(projectRes.data)
-      setTasks(tasksRes.data)
-      setStatus("success")
-    } catch (err: any) {
-      if (err.name === "CanceledError") return
+        setProject(projectRes.data)
+        setTasks(tasksRes.data)
+        setStatus("success")
+      } catch (err: any) {
+        if (err.name === "CanceledError") return
 
-      if (err.response?.status === 404) {
-        setStatus("error")   // Not found
-      } else {
-        setStatus("error")   // Server error
+        if (err.response?.status === 404) {
+          setStatus("error")   // Not found
+        } else {
+          setStatus("error")   // Server error
+        }
       }
     }
-  }
 
-  fetchData()
+    fetchData()
 
-  return () => controller.abort()
-}, [projectId])
+    return () => controller.abort()
+  }, [projectId])
 
   // ==============================
   // MEMOIZED VALUES
@@ -210,7 +209,7 @@ useEffect(() => {
   // LOADING STATES
   // ==============================
 
-if (isAuthLoading || status === "loading" || status === "idle")  {
+  if (isAuthLoading || status === "loading" || status === "idle") {
     return (
       <div className="flex justify-center py-20">
         <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -218,7 +217,7 @@ if (isAuthLoading || status === "loading" || status === "idle")  {
     )
   }
 
-if (status === "error") {
+  if (status === "error") {
     return (
       <div className="flex flex-col items-center py-20">
         <p className="text-lg font-medium">Project not found</p>

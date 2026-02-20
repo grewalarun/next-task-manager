@@ -27,7 +27,8 @@ export interface Task {
   assignedTo: {_id:string, name:string, email:string}
   projectId: string,
   project?:{_id:string, name:string}
-  createdAt: string
+  createdAt: string,
+  createdBy?:{name:string, email:string}
   dueDate: string
   comments?: { id: string; userId: string; content: string; createdAt: string; }[]
 }
