@@ -242,7 +242,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold">{project?.name}</h1>
-          <p className="text-muted-foreground">
+          <p className="text-muted-foreground text-sm pt-4 mt-4 border-t">
             {project?.description}
           </p>
         </div>

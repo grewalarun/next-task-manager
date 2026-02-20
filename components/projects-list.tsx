@@ -46,28 +46,36 @@ export function ProjectsList() {
         <p className="mt-3 text-sm text-muted-foreground">
           No projects found
         </p>
+        <div className="mt-5">
+        <Link href="/projects/new">
+          <Button className="rounded-xl">
+            <Plus className="mr-1.5 h-4 w-4" />
+            Create New Project
+          </Button>
+        </Link>
+        </div>
       </div>
     )
   }
 
   return (
     <div className="flex flex-col gap-8">
- <div className="flex items-start justify-between gap-4">
-  <div>
-    <h1 className="text-2xl font-bold text-foreground">Projects</h1>
-    <p className="mt-1 text-sm text-muted-foreground">
-      Manage and track all your team projects in one place.
-    </p>
-  </div>
-{manageproject&&
-  <Link href="/projects/new">
-    <Button className="rounded-xl">
-      <Plus className="mr-1.5 h-4 w-4" />
-      Add Project
-    </Button>
-  </Link>
-}
-</div>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Projects</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Manage and track all your team projects in one place.
+          </p>
+        </div>
+        {manageproject &&
+          <Link href="/projects/new">
+            <Button className="rounded-xl">
+              <Plus className="mr-1.5 h-4 w-4" />
+              Add Project
+            </Button>
+          </Link>
+        }
+      </div>
 
 
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
