@@ -16,6 +16,7 @@ import {
   Loader2,
   Trash,
   Pencil,
+  ChevronRight,
 } from "lucide-react"
 
 import { Project, Task } from "@/lib/data"
@@ -237,7 +238,16 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
 
   return (
     <div className="flex flex-col gap-8">
-
+      {/* Breadcrumb */}
+      <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
+        <Link href="/">Dashboard</Link>
+        <ChevronRight className="h-3.5 w-3.5" />
+        <Link href="/projects">Projects</Link>
+        <ChevronRight className="h-3.5 w-3.5" />
+        <Link href={`/projects/${projectId}`}>
+          {project?.name}
+        </Link>
+        </nav>
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
@@ -298,7 +308,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
         {stats.map((stat) => (
           <div
             key={stat.label}
-            className="flex items-center gap-4 rounded-xl border p-4"
+            className="flex items-center gap-4 rounded-xl bg-card border p-4"
           >
             <stat.icon className={`h-5 w-5 ${stat.color}`} />
             <div>
@@ -320,14 +330,14 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
         </Link>
 
         <Link href={`/projects/${projectId}/members`}>
-          <Button variant="outline">
+          <Button variant="outline" className="bg-purple-100">
             <UserPlus className="h-4 w-4" /> Manage Members
           </Button>
         </Link>
 
         <div className="ml-auto">
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[160px]">
+            <SelectTrigger className="w-[160px] bg-card">
               <SelectValue placeholder="Filter by status" />
             </SelectTrigger>
             <SelectContent>
