@@ -31,7 +31,7 @@ import { getInitials } from "@/lib/utils"
 interface Props {
   task: Task
   project: string
-  onDeleted: (taskId: string) => Promise<void>
+  onDeleted: (taskId: string) => void
 }
 
 const statusConfig: Record<

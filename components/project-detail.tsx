@@ -1,11 +1,6 @@
 "use client"
 
-import {
-  useEffect,
-  useState,
-  useMemo,
-  useCallback,
-} from "react"
+import { useMemo, useCallback, useState } from "react"
 import Link from "next/link"
 import {
   ListTodo,
@@ -44,75 +39,189 @@ import { TaskRow } from "@/components/task-row"
 import api from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth, usePermission } from "./auth-context"
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query"
 
+import { fetchProjectDetail } from "@/lib/projects"
+import { fetchTasksByProject } from "@/lib/task"
 
-type Status = "idle" | "loading" | "success" | "error"
-
-
-
-export function ProjectDetail({ projectId }: { projectId: string }) {
-
-
-  const [status, setStatus] = useState<Status>("idle")
-  const [project, setProject] = useState<Project | null>(null)
-  const [tasks, setTasks] = useState<Task[]>([])
+export function ProjectDetail({
+  projectId,
+}: {
+  projectId: string
+}) {
   const [statusFilter, setStatusFilter] = useState("all")
-  const [isDeletingProject, setIsDeletingProject] = useState(false)
+  const [isDeletingProject, setIsDeletingProject] =
+    useState(false)
 
   const { toast } = useToast()
   const router = useRouter()
   const { isLoading: isAuthLoading } = useAuth()
-  const manageProject = usePermission(["project.edit", "project.delete"])
+  const manageProject = usePermission([
+    "project.edit",
+    "project.delete",
+  ])
+  const queryClient = useQueryClient()
 
   // ==============================
-  // DATA FETCH
+  // PROJECT QUERY
   // ==============================
 
-  useEffect(() => {
-    if (!projectId) return
+  const {
+    data: project,
+    isLoading: isProjectLoading,
+    isError: isProjectError,
+  } = useQuery<Project>({
+    queryKey: ["project", projectId],
+    queryFn: () => fetchProjectDetail(projectId),
+    enabled: !!projectId,
+  })
 
-    const controller = new AbortController()
+  // ==============================
+  // TASKS QUERY (🔥 SAFE VERSION)
+  // ==============================
 
-    const fetchData = async () => {
-      try {
-        setStatus("loading")
+  const {
+    data: tasksData,
+    isLoading: isTasksLoading,
+  } = useQuery({
+    queryKey: ["tasks", projectId],
+    queryFn: async () => {
+      const result =
+        await fetchTasksByProject(projectId)
+      return Array.isArray(result) ? result : []
+    },
+    enabled: !!projectId,
+    refetchOnMount: "always",
+  })
 
-        const [projectRes, tasksRes] = await Promise.all([
-          api.get<Project>(`/projects/${projectId}`, {
-            signal: controller.signal,
-          }),
-          api.get<Task[]>(`/projects/${projectId}/tasks`, {
-            signal: controller.signal,
-          }),
+  // 🔥 GUARANTEE ARRAY
+  const tasks: Task[] = useMemo(() => {
+    return Array.isArray(tasksData)
+      ? tasksData
+      : []
+  }, [tasksData])
+
+  // ==============================
+  // DELETE TASK MUTATION (SAFE)
+  // ==============================
+
+  const { mutate: deleteTask } = useMutation({
+    mutationFn: async (taskId: string) => {
+      return api.delete(
+        `/projects/${projectId}/tasks/${taskId}`
+      )
+    },
+
+    onMutate: async (taskId: string) => {
+      await queryClient.cancelQueries({
+        queryKey: ["tasks", projectId],
+      })
+
+      const previousTasks =
+        queryClient.getQueryData([
+          "tasks",
+          projectId,
         ])
 
-        setProject(projectRes.data)
-        setTasks(tasksRes.data)
-        setStatus("success")
-      } catch (err: any) {
-        if (err.name === "CanceledError") return
-
-        if (err.response?.status === 404) {
-          setStatus("error")   // Not found
-        } else {
-          setStatus("error")   // Server error
+      queryClient.setQueryData(
+        ["tasks", projectId],
+        (old: any) => {
+          const safeOld = Array.isArray(old)
+            ? old
+            : []
+          return safeOld.filter(
+            (t) => t._id !== taskId
+          )
         }
+      )
+
+      return { previousTasks }
+    },
+
+    onError: (err: any, _taskId, context) => {
+      if (context?.previousTasks) {
+        queryClient.setQueryData(
+          ["tasks", projectId],
+          context.previousTasks
+        )
       }
-    }
 
-    fetchData()
+      toast({
+        variant: "destructive",
+        title: "Failed to delete task",
+        description:
+          err?.response?.data?.message ||
+          "Something went wrong.",
+      })
+    },
 
-    return () => controller.abort()
-  }, [projectId])
+    onSettled: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["tasks", projectId],
+      })
+    },
+
+    onSuccess: () => {
+      toast({
+        variant: "success",
+        title: "Task deleted",
+      })
+    },
+  })
 
   // ==============================
-  // MEMOIZED VALUES
+  // DELETE PROJECT
+  // ==============================
+
+  const handleDeleteProject = useCallback(
+    async () => {
+      if (!project) return
+
+      try {
+        setIsDeletingProject(true)
+
+        await api.delete(`/projects/${projectId}`)
+
+        toast({
+          variant: "success",
+          title: "Project deleted",
+        })
+
+        router.push("/projects")
+        router.refresh()
+      } catch (err: any) {
+        toast({
+          variant: "destructive",
+          title: "Failed to delete project",
+          description:
+            err?.response?.data?.message ||
+            "Something went wrong.",
+        })
+      } finally {
+        setIsDeletingProject(false)
+      }
+    },
+    [project, projectId, router, toast]
+  )
+
+  // ==============================
+  // FILTERED TASKS (SAFE)
   // ==============================
 
   const filteredTasks = useMemo(() => {
     if (statusFilter === "all") return tasks
-    return tasks.filter((t) => t.status === statusFilter)
+    return tasks.filter(
+      (t) => t.status === statusFilter
+    )
   }, [tasks, statusFilter])
+
+  // ==============================
+  // STATS (SAFE)
+  // ==============================
 
   const stats = useMemo(() => {
     if (!project) return []
@@ -132,85 +241,24 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
       },
       {
         label: "Created",
-        value: new Date(project.createdAt).toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-          year: "numeric",
-        }),
+        value: new Date(
+          project.createdAt
+        ).toLocaleDateString(),
         icon: CalendarDays,
         color: "text-accent",
       },
     ]
-  }, [tasks.length, project])
+  }, [tasks, project])
 
   // ==============================
-  // HANDLERS
+  // LOADING
   // ==============================
 
-  const handleDeleteProject = useCallback(async () => {
-    if (!project) return
-
-    try {
-      setIsDeletingProject(true)
-
-      await api.delete(`/projects/${projectId}`)
-
-      toast({
-        variant: "success",
-        title: "Project deleted",
-        description: "The project has been removed successfully.",
-      })
-
-      router.push("/projects")
-      router.refresh()
-    } catch (err: any) {
-      toast({
-        variant: "destructive",
-        title: "Failed to delete project",
-        description:
-          err?.response?.data?.message ||
-          "Something went wrong. Please try again.",
-      })
-    } finally {
-      setIsDeletingProject(false)
-    }
-  }, [project, projectId, router, toast])
-
-  const handleDeleteTask = useCallback(
-    async (taskId: string) => {
-      const previous = tasks
-
-      // Optimistic update
-      setTasks((prev) => prev.filter((t) => t._id !== taskId))
-
-      try {
-        await api.delete(`/projects/${projectId}/tasks/${taskId}`)
-
-        toast({
-          variant: "success",
-          title: "Task deleted",
-          description: "The task has been removed successfully.",
-        })
-      } catch (err: any) {
-        setTasks(previous) // rollback
-
-        toast({
-          variant: "destructive",
-          title: "Failed to delete task",
-          description:
-            err?.response?.data?.message ||
-            "Something went wrong. Please try again.",
-        })
-      }
-    },
-    [tasks, projectId, toast]
-  )
-
-  // ==============================
-  // LOADING STATES
-  // ==============================
-
-  if (isAuthLoading || status === "loading" || status === "idle") {
+  if (
+    isAuthLoading ||
+    isProjectLoading ||
+    isTasksLoading
+  ) {
     return (
       <div className="flex justify-center py-20">
         <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -218,10 +266,12 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
     )
   }
 
-  if (status === "error") {
+  if (isProjectError || !project) {
     return (
       <div className="flex flex-col items-center py-20">
-        <p className="text-lg font-medium">Project not found</p>
+        <p className="text-lg font-medium">
+          Project not found
+        </p>
         <Link
           href="/projects"
           className="mt-2 text-sm text-primary hover:underline"
@@ -238,7 +288,6 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
 
   return (
     <div className="flex flex-col gap-8">
-      {/* Breadcrumb */}
       <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
         <Link href="/">Dashboard</Link>
         <ChevronRight className="h-3.5 w-3.5" />
@@ -247,7 +296,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
         <Link href={`/projects/${projectId}`}>
           {project?.name}
         </Link>
-        </nav>
+      </nav>
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
@@ -362,7 +411,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
               key={task._id}
               task={task}
               project={projectId}
-              onDeleted={handleDeleteTask}
+              onDeleted={deleteTask}
             />
           ))
         )}
