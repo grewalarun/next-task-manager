@@ -4,32 +4,23 @@ import Link from "next/link"
 import { FolderKanban, Users, CalendarDays, ListTodo, Loader2 } from "lucide-react"
 import { Project } from "@/lib/data"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { useEffect, useState } from "react"
-import api from "@/lib/api"
+
 import { getInitials } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Plus } from "lucide-react"
 import { usePermission } from "./auth-context"
+import { useQuery } from "@tanstack/react-query";
+import { fetchProjects } from "@/lib/projects";
 
 export function ProjectsList() {
-  const [projects, setProjects] = useState<Project[]>([])
-  const [isLoading, setIsLoading] = useState(true)
   const manageproject = usePermission(["project.delete", "project.edit"]);
-  useEffect(() => {
-    const fetchProjects = async () => {
-      try {
-        setIsLoading(true)
-        const res = await api.get<Project[]>("/projects")
-        setProjects(res.data)
-      } catch (err) {
-        console.error("Failed to fetch projects")
-      } finally {
-        setIsLoading(false)
-      }
-    }
 
-    fetchProjects()
-  }, [])
+
+const { data: projects = [], isLoading, error, isError } = useQuery<Project[]>({
+  queryKey: ["projects"],
+  queryFn: fetchProjects,
+});
+
 
   if (isLoading) {
     return (

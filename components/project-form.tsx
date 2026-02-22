@@ -93,6 +93,9 @@ console.log(projectId);
           title: "Project updated",
           description: "Project updated successfully.",
         })
+          router.push(`/projects/${projectId}/`)
+          router.refresh()
+        return
       } else {
         await api.post("/projects", {
           name,

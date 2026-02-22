@@ -12,10 +12,13 @@ import {
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { useEffect, useState } from "react"
 import { Project, Task } from "@/lib/data"
-import api from "@/lib/api"
 import { getInitials } from "@/lib/utils"
+
+import { useQueries, useQuery } from "@tanstack/react-query";
+import { fetchProjects } from "@/lib/projects";
+import { fetchTasks } from "@/lib/task"
+
 
 const statusColors: Record<string, string> = {
   todo: "bg-muted text-muted-foreground",
@@ -30,29 +33,39 @@ const statusLabels: Record<string, string> = {
 }
 
 export function DashboardContent() {
-  const [projects, setProjects] = useState<Project[]>([])
-  const [tasks, setTasks] = useState<Task[]>([])
-  const [isLoading, setIsLoading] = useState(true)
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setIsLoading(true)
-        const [projectsRes, tasksRes] = await Promise.all([
-          api.get<Project[]>("/projects"),
-          api.get<Task[]>("/tasks/me"),
-        ])
-        setProjects(projectsRes.data)
-        setTasks(tasksRes.data)
-      } catch (err) {
-        console.error("Failed to fetch dashboard data", err)
-      } finally {
-        setIsLoading(false)
-      }
-    }
+// const { data: projects = [], isLoading, error, isError } = useQuery<Project[]>({
+//   queryKey: ["projects"],
+//   queryFn: fetchProjects,
+// });
 
-    fetchData()
-  }, [])
+// const { data: tasks = [] } = useQuery<Task[]>({
+//   queryKey: ["tasks"],
+//   queryFn: fetchTasks,
+// });
+
+
+const results = useQueries({
+  queries: [
+    {
+      queryKey: ["projects"],
+      queryFn: fetchProjects,
+    },
+    {
+      queryKey: ["tasks"],
+      queryFn: fetchTasks,
+    },
+  ],
+}) as [
+  { data: Project[] | undefined; isLoading: boolean },
+  { data: Task[] | undefined; isLoading: boolean }
+];;
+
+const projects = results[0].data ?? [];
+const tasks = results[1].data ?? [];
+
+const isLoading = results.some((query) => query.isLoading);
+
 
   if (isLoading) {
     return (
@@ -165,7 +178,7 @@ export function DashboardContent() {
         </div>
       </div>
 
-      {/* Recent Tasks */}
+      {/* Recent Tasks  */}
       <div>
         <h2 className="mb-4 text-lg font-semibold text-foreground">Recent Tasks</h2>
         <div className="flex flex-col gap-3">
@@ -173,13 +186,13 @@ export function DashboardContent() {
             <Link
               key={task._id}
               href={`/projects/${task.project}/tasks/${task._id}`}
-              className="flex items-center gap-4 rounded-xl border border-border bg-card p-4 shadow-sm transition-shadow hover:shadow-md"
+              className="flex items-center justify-between gap-4 rounded-xl border border-border bg-card p-4 shadow-sm transition-shadow hover:shadow-md"
             >
-              <div className="min-w-0 flex-1">
+              <div className="min-w-0 w-[90%]">
                 <div className="flex items-center gap-2">
                   <span className="font-medium text-foreground">{task.title}</span>
                 </div>
-                <span className="text-xs text-muted-foreground">{task.description}</span>
+                <span className="text-xs text-muted-foreground line-clamp-1">{task.description}</span>
               </div>
               <div className="hidden items-center gap-3 sm:flex">
                 <Badge className={`${statusColors[task.status]} border-0 text-[11px]`}>
@@ -195,6 +208,7 @@ export function DashboardContent() {
           ))}
         </div>
       </div>
+     
     </div>
   )
 }

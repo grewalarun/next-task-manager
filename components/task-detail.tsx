@@ -36,12 +36,29 @@ import { getInitials } from "@/lib/utils"
 import { Button } from "./ui/button"
 import { useToast } from "@/hooks/use-toast"
 import { useRouter } from "next/navigation"
+import { fetchTasksDetail } from "@/lib/task"
+import { useQuery } from "@tanstack/react-query"
 
-const priorityConfig: Record<string, { label: string; className: string }> = {
-  low: { label: "Low", className: "bg-muted text-muted-foreground" },
-  medium: { label: "Medium", className: "bg-primary/15 text-primary" },
-  high: { label: "High", className: "bg-accent/15 text-accent" },
-  urgent: { label: "Urgent", className: "bg-secondary/15 text-secondary" },
+const priorityConfig: Record<
+  string,
+  { label: string; className: string }
+> = {
+  low: {
+    label: "Low",
+    className: "bg-muted text-muted-foreground",
+  },
+  medium: {
+    label: "Medium",
+    className: "bg-primary/15 text-primary",
+  },
+  high: {
+    label: "High",
+    className: "bg-accent/15 text-accent",
+  },
+  urgent: {
+    label: "Urgent",
+    className: "bg-secondary/15 text-secondary",
+  },
 }
 
 export function TaskDetail({
@@ -51,51 +68,67 @@ export function TaskDetail({
   projectId: string
   taskId: string
 }) {
-  const [task, setTask] = useState<Task>()
-  const [status, setStatus] = useState<TaskStatus | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [isUpdating, setIsUpdating] = useState(false)
-  const [deleting, setDeleting] = useState(false)
-  const { toast } = useToast();
-  const router = useRouter();
+  const [status, setStatus] =
+    useState<TaskStatus | null>(null)
+  const [isUpdating, setIsUpdating] =
+    useState(false)
+  const [deleting, setDeleting] =
+    useState(false)
 
+  const { toast } = useToast()
+  const router = useRouter()
 
-  useEffect(() => {
-    const fetchTask = async () => {
-      try {
-        setIsLoading(true)
-        const res = await api.get<Task>(
-          `/projects/${projectId}/tasks/${taskId}`
+  // ✅ FIXED QUERY KEY (VERY IMPORTANT)
+  const {
+    data,
+    isLoading,
+    isError,
+  } = useQuery({
+    queryKey: ["task", projectId, taskId], // 🔥 unique key
+    queryFn: async () => {
+      const result =
+        await fetchTasksDetail(
+          projectId,
+          taskId
         )
+      return result ?? null
+    },
+    enabled: !!projectId && !!taskId,
+    refetchOnMount: "always",
+  })
 
-        setTask(res.data)
-        setStatus(res.data.status)
-      } catch (err) {
-        console.error("Failed to fetch task")
-      } finally {
-        setIsLoading(false)
-      }
+  // ✅ Guarantee object
+  const task: Task | null =
+    data && typeof data === "object"
+      ? data
+      : null
+
+  // Sync status when task loads
+  useEffect(() => {
+    if (task?.status) {
+      setStatus(task.status)
     }
+  }, [task])
 
-    if (projectId && taskId) {
-      fetchTask()
-    }
-  }, [projectId, taskId])
-
-  const handleStatusChange = async (newStatus: TaskStatus) => {
+  const handleStatusChange = async (
+    newStatus: TaskStatus
+  ) => {
     if (!task) return
 
     try {
       setIsUpdating(true)
-      setStatus(newStatus) // optimistic update
+      setStatus(newStatus)
 
       await api.patch(
         `/projects/${projectId}/tasks/${taskId}`,
         { status: newStatus }
       )
     } catch (err) {
-      console.error("Failed to update status")
-      setStatus(task.status) // rollback
+      setStatus(task.status)
+      toast({
+        variant: "destructive",
+        title: "Failed to update status",
+      })
     } finally {
       setIsUpdating(false)
     }
@@ -103,32 +136,39 @@ export function TaskDetail({
 
   const handleDeleteTask = useCallback(
     async () => {
-
       try {
-        await api.delete(`/projects/${projectId}/tasks/${taskId}`)
+        setDeleting(true)
+
+        await api.delete(
+          `/projects/${projectId}/tasks/${taskId}`
+        )
 
         toast({
           variant: "success",
           title: "Task deleted",
-          description: "The task has been removed successfully.",
         })
-        router.push("/projects")
-        router.refresh()
+
+        router.push(
+          `/projects/${projectId}`
+        )
       } catch (err: any) {
-
-        // rollback
-
         toast({
           variant: "destructive",
           title: "Failed to delete task",
           description:
             err?.response?.data?.message ||
-            "Something went wrong. Please try again.",
+            "Something went wrong.",
         })
+      } finally {
+        setDeleting(false)
       }
     },
-    [projectId, toast]
+    [projectId, taskId, router, toast]
   )
+
+  // ======================
+  // Loading / Error
+  // ======================
 
   if (isLoading) {
     return (
@@ -138,10 +178,10 @@ export function TaskDetail({
     )
   }
 
-  if (!task) {
+  if (isError || !task) {
     return (
       <div className="flex flex-col items-center py-20">
-        <p className="text-lg font-medium text-foreground">
+        <p className="text-lg font-medium">
           Task not found
         </p>
         <Link
@@ -154,7 +194,10 @@ export function TaskDetail({
     )
   }
 
-  const priority = priorityConfig[task.priority]
+  // ✅ Safe priority
+  const priority =
+    priorityConfig[task.priority] ??
+    priorityConfig["low"]
 
   return (
     <div className="flex flex-col gap-8">
@@ -165,11 +208,11 @@ export function TaskDetail({
         <Link href="/projects">Projects</Link>
         <ChevronRight className="h-3.5 w-3.5" />
         <Link href={`/projects/${projectId}`}>
-          {task.project?.name}
+          {task.project?.name ?? "Project"}
         </Link>
         <ChevronRight className="h-3.5 w-3.5" />
         <span className="font-medium text-foreground">
-          {task.title}
+          {task.title ?? "Untitled Task"}
         </span>
       </nav>
 
@@ -179,13 +222,14 @@ export function TaskDetail({
         className="flex items-center gap-1.5 text-sm text-primary hover:underline w-fit"
       >
         <ArrowLeft className="h-3.5 w-3.5" />
-        Back to {task.project?.name}
+        Back to{" "}
+        {task.project?.name ?? "Project"}
       </Link>
 
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">
+          <h1 className="text-2xl font-bold">
             {task.title}
           </h1>
           <p className="mt-1 text-xs text-muted-foreground">
@@ -194,7 +238,9 @@ export function TaskDetail({
         </div>
 
         <div className="flex gap-2">
-          <Link href={`/projects/${projectId}/tasks/${task._id}/edit`}>
+          <Link
+            href={`/projects/${projectId}/tasks/${task._id}/edit`}
+          >
             <Button>
               <Pencil className="mr-1.5 h-4 w-4" />
               Edit
@@ -204,13 +250,14 @@ export function TaskDetail({
 
           <AlertDialog>
             <AlertDialogTrigger asChild>
-               <Button
-                  variant="destructive"
-                  disabled={deleting}
-                >
-                  <Trash2 className="mr-1.5 h-4 w-4" />
-                  {deleting ? "Deleting..." : "Delete"}
-                </Button>
+          <Button
+            variant="destructive"
+            disabled={deleting}
+            onClick={handleDeleteTask}
+          >
+            <Trash2 className="mr-1.5 h-4 w-4" />
+            {deleting ? "Deleting..." : "Delete"}
+          </Button>
             </AlertDialogTrigger>
 
             <AlertDialogContent>
@@ -241,7 +288,6 @@ export function TaskDetail({
           </AlertDialog>
 
         </div>
-
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
@@ -289,19 +335,22 @@ export function TaskDetail({
           {/* Assigned */}
           <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
             <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Assigned To
-            </h3>
-            <div className="flex items-center gap-3">
-              <Avatar className="h-9 w-9">
-                <AvatarFallback>
-                  {getInitials(task.assignedTo.name)}
-                </AvatarFallback>
-              </Avatar>
-              <div>
-                <p className="text-sm font-medium">
-                  {task.assignedTo.name}
-                </p>
-                <p className="text-xs text-muted-foreground">
+          Assigned To
+        </h3>
+        <div className="flex items-center gap-3">
+          <Avatar className="h-9 w-9">
+            <AvatarFallback>
+              {getInitials(
+                task.assignedTo?.name ?? ""
+              )}
+            </AvatarFallback>
+          </Avatar>
+          <div>
+            <p className="text-sm font-medium">
+              {task.assignedTo?.name ??
+                "Unassigned"}
+            </p>
+            <p className="text-xs text-muted-foreground">
                   {task.assignedTo.email}
                 </p>
               </div>
@@ -326,22 +375,22 @@ export function TaskDetail({
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {task.createdBy?.email}
-                </p>
-              </div>
-            </div>
+            </p>
           </div>
+        </div>
+      </div>
 
-          {/* Priority */}
+      {/* Priority */}
           <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
             <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Priority
             </h3>
             <Badge className={`${priority.className} border-0 text-xs`}>
-              {priority.label}
-            </Badge>
+        {priority.label}
+      </Badge>
           </div>
 
-          {/* Dates */}
+      {/* Dates */}
           <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
             <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Dates
@@ -361,14 +410,14 @@ export function TaskDetail({
               <div>
                 <p className="text-xs text-muted-foreground">
                   Due Date
-                </p>
-                <p>
+        </p>
+        <p>
                   {new Date(task.dueDate).toLocaleDateString(
                     "en-US",
                     { month: "long", day: "numeric", year: "numeric" }
                   )}
-                </p>
-              </div>
+        </p>
+      </div>
             </div>
           </div>
         </div>
