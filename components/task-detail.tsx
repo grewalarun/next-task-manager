@@ -68,12 +68,9 @@ export function TaskDetail({
   projectId: string
   taskId: string
 }) {
-  const [status, setStatus] =
-    useState<TaskStatus | null>(null)
-  const [isUpdating, setIsUpdating] =
-    useState(false)
-  const [deleting, setDeleting] =
-    useState(false)
+  const [status, setStatus] = useState<TaskStatus | null>(null)
+  const [isUpdating, setIsUpdating] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   const { toast } = useToast()
   const router = useRouter()
@@ -250,14 +247,14 @@ export function TaskDetail({
 
           <AlertDialog>
             <AlertDialogTrigger asChild>
-          <Button
-            variant="destructive"
-            disabled={deleting}
-            onClick={handleDeleteTask}
-          >
-            <Trash2 className="mr-1.5 h-4 w-4" />
-            {deleting ? "Deleting..." : "Delete"}
-          </Button>
+              <Button
+                variant="destructive"
+                disabled={deleting}
+                onClick={handleDeleteTask}
+              >
+                <Trash2 className="mr-1.5 h-4 w-4" />
+                {deleting ? "Deleting..." : "Delete"}
+              </Button>
             </AlertDialogTrigger>
 
             <AlertDialogContent>
@@ -297,9 +294,12 @@ export function TaskDetail({
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
               Description
             </h2>
-            <p className="text-sm text-foreground leading-relaxed">
-              {task.description}
-            </p>
+            <div className="text-sm text-foreground leading-relaxed">
+              <div
+                className="prose prose-sm max-w-none"
+                dangerouslySetInnerHTML={{ __html: task.description }}
+              />
+            </div>
           </div>
 
           <TaskComments task={task} projectId={projectId} />
@@ -335,22 +335,22 @@ export function TaskDetail({
           {/* Assigned */}
           <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
             <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Assigned To
-        </h3>
-        <div className="flex items-center gap-3">
-          <Avatar className="h-9 w-9">
-            <AvatarFallback>
-              {getInitials(
-                task.assignedTo?.name ?? ""
-              )}
-            </AvatarFallback>
-          </Avatar>
-          <div>
-            <p className="text-sm font-medium">
-              {task.assignedTo?.name ??
-                "Unassigned"}
-            </p>
-            <p className="text-xs text-muted-foreground">
+              Assigned To
+            </h3>
+            <div className="flex items-center gap-3">
+              <Avatar className="h-9 w-9">
+                <AvatarFallback>
+                  {getInitials(
+                    task.assignedTo?.name ?? ""
+                  )}
+                </AvatarFallback>
+              </Avatar>
+              <div>
+                <p className="text-sm font-medium">
+                  {task.assignedTo?.name ??
+                    "Unassigned"}
+                </p>
+                <p className="text-xs text-muted-foreground">
                   {task.assignedTo.email}
                 </p>
               </div>
@@ -375,22 +375,22 @@ export function TaskDetail({
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {task.createdBy?.email}
-            </p>
+                </p>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
 
-      {/* Priority */}
+          {/* Priority */}
           <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
             <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Priority
             </h3>
             <Badge className={`${priority.className} border-0 text-xs`}>
-        {priority.label}
-      </Badge>
+              {priority.label}
+            </Badge>
           </div>
 
-      {/* Dates */}
+          {/* Dates */}
           <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
             <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Dates
@@ -410,14 +410,14 @@ export function TaskDetail({
               <div>
                 <p className="text-xs text-muted-foreground">
                   Due Date
-        </p>
-        <p>
+                </p>
+                <p>
                   {new Date(task.dueDate).toLocaleDateString(
                     "en-US",
                     { month: "long", day: "numeric", year: "numeric" }
                   )}
-        </p>
-      </div>
+                </p>
+              </div>
             </div>
           </div>
         </div>

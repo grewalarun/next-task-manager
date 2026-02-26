@@ -3,12 +3,12 @@
 import { useEffect, useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, ChevronRight, Loader2 } from "lucide-react"
+import { ArrowLeft, ChevronRight, Loader2, Sparkles, PenLine } from "lucide-react"
 import {
   type Task,
   type TaskStatus,
   type Priority,
-  Project,
+  type Project,
 } from "@/lib/data"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -22,8 +22,11 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import api from "@/lib/api"
-import { getProjectById } from "@/lib/project.service"
 import { useToast } from "@/hooks/use-toast"
+import { fetchTasksDetail } from "@/lib/task"
+import { useQuery } from "@tanstack/react-query"
+import { fetchProjectDetail } from "@/lib/projects"
+import axios from "axios"
 
 interface TaskFormProps {
   projectId: string
@@ -39,15 +42,20 @@ interface TaskFormState {
   dueDate: string
 }
 
+// ─── Description mode type ───────────────────────────────────────────────────
+type DescriptionMode = "manual" | "ai"
+
 export function TaskForm({ projectId, taskId }: TaskFormProps) {
   const router = useRouter()
-  const [project, setProject] = useState<Project | null>(null)
+  const { toast } = useToast()
   const isEditing = Boolean(taskId)
-  const [isProjectLoading, setIsProjectLoading] = useState(true)
-  const [isTaskLoading, setIsTaskLoading] = useState(isEditing)
 
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const { toast } = useToast();
+
+  // ─── NEW: description mode & AI prompt state ────────────────────────────
+  const [descriptionMode, setDescriptionMode] = useState<DescriptionMode>("manual")
+  const [aiPrompt, setAiPrompt] = useState("")
+  const [isGenerating, setIsGenerating] = useState(false)
 
   const [form, setForm] = useState<TaskFormState>({
     title: "",
@@ -58,121 +66,176 @@ export function TaskForm({ projectId, taskId }: TaskFormProps) {
     dueDate: "",
   })
 
-  /* ---------------------- */
-  /* Handle input changes   */
-  /* ---------------------- */
+  /* =========================
+     FETCH PROJECT
+  ========================== */
+
+  const {
+    data: project,
+    isLoading: isProjectLoading,
+  } = useQuery<Project>({
+    queryKey: ["project", projectId],
+    queryFn: () => fetchProjectDetail(projectId),
+    enabled: !!projectId,
+  })
+
+  /* =========================
+     FETCH TASK (EDIT MODE)
+  ========================== */
+
+  const {
+    data: task,
+    isLoading: isTaskLoading,
+  } = useQuery<Task>({
+    queryKey: ["task", projectId, taskId],
+    queryFn: () => fetchTasksDetail(projectId, taskId!),
+    enabled: !!projectId && !!taskId,
+  })
+
+  /* =========================
+     SET FORM WHEN TASK LOADS
+  ========================== */
+
+  useEffect(() => {
+    if (isEditing && task) {
+      setForm({
+        title: task.title ?? "",
+        description: task.description ?? "",
+        status: task.status ?? "todo",
+        priority: task.priority ?? "medium",
+        assignedTo: task.assignedTo?._id ?? "",
+        dueDate: task.dueDate
+          ? new Date(task.dueDate).toISOString().split("T")[0]
+          : "",
+      })
+    }
+  }, [isEditing, task])
+
+  /* =========================
+     HANDLE FIELD UPDATE
+  ========================== */
+
   const updateField = useCallback(
-    <K extends keyof TaskFormState>(key: K, value: TaskFormState[K]) => {
+    <K extends keyof TaskFormState>(
+      key: K,
+      value: TaskFormState[K]
+    ) => {
       setForm((prev) => ({ ...prev, [key]: value }))
     },
     []
   )
 
+  /* =========================
+     NEW: GENERATE AI DESCRIPTION
+  ========================== */
 
-  /* ---------------------- */
-  /* Fetch task if editing  */
-  /* ---------------------- */
- 
-useEffect(() => {
-  const load = async () => {
+  const handleGenerateDescription = async () => {
+    if (!aiPrompt.trim()) return
+
     try {
-      setIsProjectLoading(true)
-      setIsTaskLoading(isEditing)
+      setIsGenerating(true)
 
-      const projectPromise = getProjectById(projectId)
+      // The endpoint should accept { prompt } and return { description }.
+      const response = await axios.post<{ description: string }>(
+        "/api/generate",
+        {
+          prompt: aiPrompt,
+          // Pass extra context so the AI can write a more relevant description
+          taskTitle: form.title,
+          projectName: project?.name,
+        }
+      )
 
-      const taskPromise = isEditing
-        ? api.get(`/projects/${projectId}/tasks/${taskId}`)
-        : Promise.resolve(null)
+      const generated = response.data?.description
 
-      const [projectData, task] = await Promise.all([
-        projectPromise,
-        taskPromise,
-      ])
+      if (!generated) throw new Error("No description returned")
 
-      setProject(projectData)
+      // ── Fill the description field ───────────────────────────────────────
+      updateField("description", generated)
 
-      if (task) {
-       setForm({
-          title: task.data.title || "",
-          description: task.data.description || "",
-          status: task.data.status || "todo",
-          priority: task.data.priority || "medium",
-          assignedTo: task.data.assignedTo?._id || "",
-          dueDate: task.data.dueDate
-            ? new Date(task.data.dueDate).toISOString().split("T")[0]
-            : "",
-        })
-      }
+      // ── Switch to manual mode so the user can review / edit the result ──
+      setDescriptionMode("manual")
 
+      toast({
+        variant:"success",
+        title: "Description generated",
+        description: "AI description has been filled in. Feel free to edit it.",
+      })
+    } catch {
+      toast({
+        variant: "destructive",
+        title: "Generation failed",
+        description: "Could not generate description. Please try again.",
+      })
     } finally {
-      setIsProjectLoading(false)
-      setIsTaskLoading(false)
+      setIsGenerating(false)
     }
   }
 
-  load()
-}, [projectId, taskId])
+  /* =========================
+     HANDLE SUBMIT
+  ========================== */
 
-const isLoading = isProjectLoading || isTaskLoading
+  const handleSubmit = async (
+    e: React.FormEvent
+  ) => {
+    e.preventDefault()
 
-  /* ---------------------- */
-  /* Submit Handler         */
-  /* ---------------------- */
-  const handleSubmit = useCallback(
-    async (e: React.FormEvent) => {
-      e.preventDefault()
+    if (!form.title.trim()) return
 
-      if (!form.title.trim()) return
+    try {
+      setIsSubmitting(true)
 
-      try {
-        setIsSubmitting(true)
-
-        const payload = {
-          ...form,
-          project: project?._id
-        }
-
-        if (isEditing) {
-          await api.patch(
-            `/projects/${projectId}/tasks/${taskId}`,
-            payload
-          )
-        } else {
-          await api.post(
-            `/projects/${projectId}/tasks`,
-            payload
-          )
-        }
-        toast({
-          variant: "success",
-          title: "Action Success",
-          description: "Project updated successfully",
-        })
-        router.push(`/projects/${projectId}`)
-        router.refresh()
-      } catch (err) {
-               toast({
-          variant: "destructive",
-          title: "Action failed",
-          description: "Failed to submit task",
-        })
-      
-      } finally {
-        setIsSubmitting(false)
+      const payload = {
+        ...form,
+        project: project?._id,
       }
-    },
-    [form, isEditing, projectId, taskId, router]
-  )
-  if (isLoading) {
+
+      if (isEditing) {
+        await api.patch(
+          `/projects/${projectId}/tasks/${taskId}`,
+          payload
+        )
+      } else {
+        await api.post(
+          `/projects/${projectId}/tasks`,
+          payload
+        )
+      }
+
+      toast({
+        title: "Success",
+        description: isEditing
+          ? "Task updated successfully"
+          : "Task created successfully",
+      })
+
+      router.push(`/projects/${projectId}`)
+      router.refresh()
+    } catch {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to submit task",
+      })
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  /* =========================
+     LOADING STATE
+  ========================== */
+
+  if (isProjectLoading || (isEditing && isTaskLoading)) {
     return (
       <div className="flex justify-center py-20">
         <Loader2 className="h-6 w-6 animate-spin text-primary" />
-        
       </div>
     )
   }
-if (!isProjectLoading && !project) {
+
+  if (!project) {
     return (
       <div className="flex flex-col items-center justify-center py-20">
         <p className="text-lg font-medium text-foreground">
@@ -182,15 +245,18 @@ if (!isProjectLoading && !project) {
     )
   }
 
+  /* =========================
+     UI
+  ========================== */
+
   return (
     <div className="flex flex-col gap-8">
-      {/* Breadcrumb */}
       <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
-        <Link href="/">Dashboard</Link>
-        <ChevronRight className="h-3.5 w-3.5" />
         <Link href="/projects">Projects</Link>
         <ChevronRight className="h-3.5 w-3.5" />
-        <Link href={`/projects/${projectId}`}>{project?.name}</Link>
+        <Link href={`/projects/${projectId}`}>
+          {project.name}
+        </Link>
         <ChevronRight className="h-3.5 w-3.5" />
         <span className="font-medium text-foreground">
           {isEditing ? "Edit Task" : "Create Task"}
@@ -207,7 +273,7 @@ if (!isProjectLoading && !project) {
       </Link>
 
       {/* Loading */}
-      {isLoading ? (
+      {isTaskLoading ? (
         <div className="rounded-xl border p-6 animate-pulse">
           Loading task...
         </div>
@@ -220,22 +286,121 @@ if (!isProjectLoading && !project) {
               <Label>Title *</Label>
               <Input
                 value={form.title}
-                onChange={(e) => updateField("title", e.target.value)}
+                onChange={(e) =>
+                  updateField("title", e.target.value)
+                }
                 required
               />
             </div>
 
-            {/* Description */}
-            <div className="flex flex-col gap-2">
-              <Label>Description</Label>
-              <Textarea
-                rows={5}
-                value={form.description}
-                onChange={(e) =>
-                  updateField("description", e.target.value)
-                }
-              />
+            {/* ── Description section ────────────────────────────────────── */}
+            <div className="flex flex-col gap-3">
+
+              {/* Mode toggle label row */}
+              <div className="flex items-center justify-between">
+                <Label>Description</Label>
+
+                {/* Toggle buttons */}
+                <div className="flex items-center rounded-lg border overflow-hidden text-xs font-medium">
+                  <button
+                    type="button"
+                    onClick={() => setDescriptionMode("manual")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 transition-colors ${
+                      descriptionMode === "manual"
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-background text-muted-foreground hover:bg-muted"
+                    }`}
+                  >
+                    <PenLine className="h-3.5 w-3.5" />
+                    Write manually
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDescriptionMode("ai")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 transition-colors ${
+                      descriptionMode === "ai"
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-background text-muted-foreground hover:bg-muted"
+                    }`}
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    Generate with AI
+                  </button>
+                </div>
+              </div>
+
+              {/* Manual mode: plain textarea */}
+              {descriptionMode === "manual" && (
+                <Textarea
+                  rows={5}
+                  placeholder="Enter task description..."
+                  value={form.description}
+                  onChange={(e) =>
+                    updateField("description", e.target.value)
+                  }
+                />
+              )}
+
+              {/* AI mode: prompt input + generate button + preview */}
+              {descriptionMode === "ai" && (
+                <div className="flex flex-col gap-3 rounded-lg border border-dashed border-primary/40 bg-primary/5 p-4">
+
+                  {/* Prompt label + input */}
+                  <div className="flex flex-col gap-1.5">
+                    <Label className="text-xs text-muted-foreground">
+                      Describe what this task is about in a few words
+                    </Label>
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder='e.g. "Fix login bug on Safari mobile"'
+                        value={aiPrompt}
+                        onChange={(e) => setAiPrompt(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault()
+                            handleGenerateDescription()
+                          }
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        onClick={handleGenerateDescription}
+                        disabled={!aiPrompt.trim() || isGenerating}
+                        className="shrink-0"
+                      >
+                        {isGenerating ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+                            Generating…
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="h-4 w-4 mr-1.5" />
+                            Generate
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Preview of already-generated description (if any) */}
+                  {form.description && (
+                    <div className="flex flex-col gap-1.5">
+                      <Label className="text-xs text-muted-foreground">
+                        Generated description preview
+                      </Label>
+                      <div className="rounded-md border bg-background px-3 py-2 text-sm text-foreground whitespace-pre-wrap">
+                        {form.description}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Switch to <strong>Write manually</strong> to edit the generated text.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
+            {/* ── End description section ────────────────────────────────── */}
 
             {/* Grid Fields */}
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
@@ -266,6 +431,7 @@ if (!isProjectLoading && !project) {
               <div className="flex flex-col gap-2">
                 <Label>Priority</Label>
                 <Select
+                  key={`priority-${form.priority}`}
                   value={form.priority}
                   onValueChange={(v) =>
                     updateField("priority", v as Priority)
@@ -278,7 +444,6 @@ if (!isProjectLoading && !project) {
                     <SelectItem value="low">Low</SelectItem>
                     <SelectItem value="medium">Medium</SelectItem>
                     <SelectItem value="high">High</SelectItem>
-                    <SelectItem value="urgent">Urgent</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -287,6 +452,7 @@ if (!isProjectLoading && !project) {
               <div className="flex flex-col gap-2">
                 <Label>Assignee</Label>
                 <Select
+                  key={`assignee-${form.assignedTo}`}
                   value={form.assignedTo}
                   onValueChange={(v) =>
                     updateField("assignedTo", v)
@@ -329,8 +495,8 @@ if (!isProjectLoading && !project) {
               {isSubmitting
                 ? "Saving..."
                 : isEditing
-                  ? "Save Changes"
-                  : "Create Task"}
+                ? "Save Changes"
+                : "Create Task"}
             </Button>
 
             <Link href={`/projects/${projectId}`}>
