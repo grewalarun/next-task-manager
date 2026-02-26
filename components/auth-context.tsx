@@ -62,6 +62,7 @@ export interface AuthUser {
 
 interface AuthContextValue {
   user: AuthUser | null
+  setUser: React.Dispatch<React.SetStateAction<AuthUser | null>>
   isLoading: boolean
   login: (
     email: string,
@@ -234,6 +235,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider
       value={{
         user,
+        setUser,
         isLoading,
         login,
         register,

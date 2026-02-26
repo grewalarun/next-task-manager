@@ -8,8 +8,11 @@ import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Loader2 } from "lucide-react"
-
+import { ArrowLeft, ChevronRight, Loader2 } from "lucide-react"
+import Link from "next/link"
+import { useQuery } from "@tanstack/react-query"
+import { fetchProjectDetail } from "@/lib/projects"
+import { type Project } from "@/lib/data"
 interface ProjectFormProps {
   projectId?: string
 }
@@ -19,52 +22,36 @@ type Status = "idle" | "loading" | "submitting" | "error"
 export default function ProjectForm({ projectId }: ProjectFormProps) {
   const router = useRouter()
   const { toast } = useToast()
-
   const isEditMode = Boolean(projectId)
 
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
   const [status, setStatus] = useState<Status>("idle")
-console.log(projectId);
-  /* ===============================
-     FETCH PROJECT (EDIT MODE)
-  =============================== */
 
-  useEffect(() => {
-    if (!isEditMode) return
+const {
+  data: project,
+  isLoading: isProjectLoading,
+  isError: isProjectError,
+} = useQuery<Project>({
+  queryKey: ["project", projectId],
+  queryFn: () => fetchProjectDetail(`${projectId}`),
+  enabled: !!projectId,
+})
 
-    const controller = new AbortController()
+/* ===============================
+   FETCH PROJECT (EDIT MODE)
+================================ */
 
-    const fetchProject = async () => {
-      try {
-        setStatus("loading")
+useEffect(() => {
+  if (!isEditMode) return
+  if (isProjectLoading) return
+  if (!project) return
 
-        const res = await api.get(`/projects/${projectId}`, {
-          signal: controller.signal,
-        })
+  setName(project.name || "")
+  setDescription(project.description || "")
+  setStatus("idle")
 
-        setName(res.data.name || "")
-        setDescription(res.data.description || "")
-        setStatus("idle")
-      } catch (err: any) {
-        if (err.name === "CanceledError") return
-
-        toast({
-          variant: "destructive",
-          title: "Failed to load project",
-          description:
-            err?.response?.data?.message ||
-            "Could not fetch project details.",
-        })
-
-        setStatus("error")
-      }
-    }
-
-    fetchProject()
-
-    return () => controller.abort()
-  }, [isEditMode, projectId, toast])
+}, [isEditMode, project, isProjectLoading])
 
   /* ===============================
      SUBMIT
@@ -154,6 +141,11 @@ console.log(projectId);
 
   return (
     <div className="mx-auto max-w-xl space-y-6 py-10">
+          <nav>
+        <Button variant={"outline"} className="flex items-center gap-1.5 text-sm" onClick={() => router.back()}>
+          <ArrowLeft/> Back 
+        </Button>
+      </nav>
       <div>
         <h1 className="text-2xl font-bold">
           {isEditMode ? "Edit Project" : "Create New Project"}
@@ -172,7 +164,7 @@ console.log(projectId);
             placeholder="Enter project title"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="mt-1"
+            className="mt-1 bg-card"
           />
         </div>
 
@@ -182,7 +174,7 @@ console.log(projectId);
             placeholder="Enter project description"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            className="mt-1"
+            className="mt-1 bg-card"
           />
         </div>
 
