@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import api from "@/lib/api"
 import { getInitials } from "@/lib/utils"
 import { comment } from "postcss"
+import Link from "next/link"
 
 function formatCommentDate(dateStr?: string) {
   if (!dateStr) return "Just now"
@@ -34,7 +35,7 @@ function CommentItem({ comment }: { comment: Comment }) {
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-foreground">
-            {comment.createdBy?.name || "User"}
+             <Link href={`/user/${comment.createdBy?._id}`}>{comment.createdBy?.name || "User"}</Link>
           </span>
           <span className="text-xs text-muted-foreground">
             {formatCommentDate(comment.createdAt)}

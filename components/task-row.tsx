@@ -95,7 +95,7 @@ export function TaskRow({ task, project, onDeleted }: Props) {
           </AvatarFallback>
         </Avatar>
         <span className="text-sm text-foreground">
-          {task.assignedTo?.name || "Unassigned"}
+          {task.assignedTo&&<Link href={`/user/${task.assignedTo?._id}`}>{task.assignedTo?.name || "Unassigned"}</Link>}
         </span>
       </div>
 

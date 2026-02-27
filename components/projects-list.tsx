@@ -141,7 +141,7 @@ const { data: projects = [], isLoading, error, isError } = useQuery<Project[]>({
                     title={m.name}
                   >
                     <AvatarFallback className="bg-primary/10 text-[10px] font-semibold text-primary">
-                      {getInitials(m.name)}
+                      <Link href={`/user/${m?._id}`}>{getInitials(m.name)}</Link>
                     </AvatarFallback>
                   </Avatar>
                 ))}

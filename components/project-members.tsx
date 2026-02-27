@@ -218,7 +218,7 @@ const handleToggleMember = useCallback(
                 </Avatar>
 
                 <div>
-                  <p className="font-medium">{user.name}</p>
+                  <p className="font-medium"><Link href={`/user/${user?._id}`}>{user.name}</Link></p>
                   <p className="text-sm text-muted-foreground">
                     {user.email}
                   </p>
