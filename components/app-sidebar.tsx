@@ -2,24 +2,18 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import {
-  LayoutDashboard,
-  FolderKanban,
-  BarChart3,
-  Settings,
-  Users,
-  X,
-} from "lucide-react"
+import { LayoutDashboard, FolderKanban, BarChart3, Settings, Users, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useSidebar } from "@/components/sidebar-context"
 import { Button } from "@/components/ui/button"
+import { ThemeToggle } from "@/components/theme-toggle"
 
 const navItems = [
-  { label: "Dashboard", href: "/", icon: LayoutDashboard },
-  { label: "Projects", href: "/projects", icon: FolderKanban },
-  { label: "Members", href: "/members", icon: Users },
-  { label: "Reports", href: "/reports", icon: BarChart3 },
-  { label: "Settings", href: "/settings", icon: Settings },
+  { label: "Dashboard", href: "/",        icon: LayoutDashboard },
+  { label: "Projects",  href: "/projects", icon: FolderKanban   },
+  { label: "Members",   href: "/members",  icon: Users           },
+  { label: "Reports",   href: "/reports",  icon: BarChart3       },
+  { label: "Settings",  href: "/settings", icon: Settings        },
 ]
 
 function NavLinks({ showLabels, onNavigate }: { showLabels: boolean; onNavigate?: () => void }) {
@@ -28,11 +22,7 @@ function NavLinks({ showLabels, onNavigate }: { showLabels: boolean; onNavigate?
   return (
     <nav className="flex flex-col gap-1 p-3" aria-label="Main navigation">
       {navItems.map((item) => {
-        const isActive =
-          item.href === "/"
-            ? pathname === "/"
-            : pathname.startsWith(item.href)
-
+        const isActive = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href)
         return (
           <Link
             key={item.href}
@@ -63,11 +53,17 @@ export function AppSidebar() {
   return (
     <aside
       className={cn(
-        "fixed left-0 top-16 z-30 hidden h-[calc(100vh-4rem)] border-r border-border bg-card transition-[width] duration-200 ease-in-out md:block",
+        "fixed left-0 top-16 z-30 hidden h-[calc(100vh-4rem)] flex-col border-r border-border bg-card transition-[width] duration-200 ease-in-out md:flex",
         isOpen ? "w-60" : "w-[68px]"
       )}
     >
-      <NavLinks showLabels={isOpen} />
+      <div className="flex-1 overflow-y-auto">
+        <NavLinks showLabels={isOpen} />
+      </div>
+
+      <div className="border-t border-border">
+        <ThemeToggle showLabel={isOpen} />
+      </div>
     </aside>
   )
 }
@@ -78,7 +74,6 @@ export function MobileSidebar() {
 
   return (
     <>
-      {/* Backdrop */}
       {isMobileOpen && (
         <div
           className="fixed inset-0 z-40 bg-foreground/20 backdrop-blur-sm md:hidden"
@@ -87,10 +82,9 @@ export function MobileSidebar() {
         />
       )}
 
-      {/* Drawer */}
       <aside
         className={cn(
-          "fixed left-0 top-0 z-50 h-full w-64 border-r border-border bg-card transition-transform duration-200 ease-in-out md:hidden",
+          "fixed left-0 top-0 z-50 flex h-full w-64 flex-col border-r border-border bg-card transition-transform duration-200 ease-in-out md:hidden",
           isMobileOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
@@ -101,17 +95,18 @@ export function MobileSidebar() {
             </div>
             <span className="text-lg font-bold text-foreground">TaskFlow</span>
           </Link>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 rounded-lg"
-            onClick={closeMobile}
-            aria-label="Close menu"
-          >
+          <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" onClick={closeMobile} aria-label="Close menu">
             <X className="h-5 w-5" />
           </Button>
         </div>
-        <NavLinks showLabels onNavigate={closeMobile} />
+
+        <div className="flex-1 overflow-y-auto">
+          <NavLinks showLabels onNavigate={closeMobile} />
+        </div>
+
+        <div className="border-t border-border">
+          <ThemeToggle showLabel />
+        </div>
       </aside>
     </>
   )
