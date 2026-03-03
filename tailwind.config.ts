@@ -10,6 +10,24 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      typography: ({ theme }: { theme: any }) => ({
+      DEFAULT: {
+        css: {
+          '--tw-prose-bold': theme('colors.secondary-foreground'),
+          '--tw-prose-body': theme('colors.foreground'),
+          strong: {
+            color: 'var(--tw-prose-bold)',
+            fontWeight: '600',
+          },
+        },
+      },
+      invert: {
+        css: {
+          '--tw-prose-bold': theme('colors.sidebar-primary'),
+          '--tw-prose-body': theme('colors.foreground'),
+        },
+      },
+    }),
       fontFamily: {
         sans: ['var(--font-inter)', 'system-ui', 'sans-serif'],
       },
