@@ -159,7 +159,7 @@ const isLoading = results.some((query) => query.isLoading);
                   {project.members.slice(0, 3).map((m) => (
                     <Avatar key={m._id} className="h-7 w-7 border-2 border-card" title={m.name}>
                       <AvatarFallback className="bg-primary/10 text-[10px] font-semibold text-primary">
-                       <Link href={`/user/${m._id}`}> {getInitials(m.name)}</Link>
+                       {getInitials(m.name)}
                       </AvatarFallback>
                     </Avatar>
                   ))}
