@@ -183,17 +183,15 @@ const isLoading = results.some((query) => query.isLoading);
         <h2 className="mb-4 text-lg font-semibold text-foreground">Recent Tasks</h2>
         <div className="flex flex-col gap-3">
           {tasks.slice(0, 4).map((task) => (
-            <Link
-              key={task._id}
-              href={`/projects/${task.project}/tasks/${task._id}`}
-              className="flex items-center justify-between gap-4 rounded-xl border border-border bg-card p-4 shadow-sm transition-shadow hover:shadow-md"
+            <div key={task._id} className="flex items-center justify-between gap-4 rounded-xl border border-border bg-card p-4 shadow-sm transition-shadow hover:shadow-md"
             >
-              <div className="min-w-0 w-[90%]">
+              <Link
+              href={`/projects/${task.project}/tasks/${task._id}`} className="min-w-0 w-[90%]">
                 <div className="flex items-center gap-2">
                   <span className="font-medium text-foreground">{task.title}</span>
                 </div>
                 <span className="text-xs text-muted-foreground line-clamp-1">{task.description}</span>
-              </div>
+              </Link>
               <div className="hidden items-center gap-3 sm:flex">
                 <Badge className={`${statusColors[task.status]} border-0 text-[11px]`}>
                   {statusLabels[task.status]}
@@ -204,7 +202,7 @@ const isLoading = results.some((query) => query.isLoading);
                   </AvatarFallback>
                 </Avatar>
               </div>
-            </Link>
+            </div>
           ))}
         </div>
       </div>

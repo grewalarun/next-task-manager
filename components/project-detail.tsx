@@ -379,7 +379,7 @@ export function ProjectDetail({
         </Link>
 
         <Link href={`/projects/${projectId}/members`}>
-          <Button variant="outline" className="bg-purple-100">
+          <Button variant="outline" className="bg-purple-100 dark:bg-purple-950 dark:text-white">
             <UserPlus className="h-4 w-4" /> Manage Members
           </Button>
         </Link>
