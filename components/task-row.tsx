@@ -77,7 +77,7 @@ export function TaskRow({ task, project, onDeleted }: Props) {
         href={`/projects/${project}/tasks/${task._id}`}
         className="min-w-0"
       >
-        <p className="text-foreground group-hover:text-primary transition-colors">
+        <p className="text-sm text-foreground group-hover:text-primary transition-colors">
           {task.title}
         </p>
         {/* <p className="mt-0.5 text-xs text-muted-foreground line-clamp-1">

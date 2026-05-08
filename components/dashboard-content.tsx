@@ -188,7 +188,9 @@ const isLoading = results.some((query) => query.isLoading);
               <Link
               href={`/projects/${task.project}/tasks/${task._id}`} className="min-w-0 w-[90%]">
                 <div className="flex items-center gap-2">
-                  <span className="font-xs text-foreground">{task.title}</span>
+                  <span className="text-sm font-medium text-foreground hover:text-primary">
+                    {task.title}
+                  </span>
                 </div>
                 {/* <span className="text-xs text-muted-foreground line-clamp-1">{task.description}</span> */}
               </Link>
