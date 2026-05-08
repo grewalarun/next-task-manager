@@ -188,9 +188,9 @@ const isLoading = results.some((query) => query.isLoading);
               <Link
               href={`/projects/${task.project}/tasks/${task._id}`} className="min-w-0 w-[90%]">
                 <div className="flex items-center gap-2">
-                  <span className="font-medium text-foreground">{task.title}</span>
+                  <span className="font-xs text-foreground">{task.title}</span>
                 </div>
-                <span className="text-xs text-muted-foreground line-clamp-1">{task.description}</span>
+                {/* <span className="text-xs text-muted-foreground line-clamp-1">{task.description}</span> */}
               </Link>
               <div className="hidden items-center gap-3 sm:flex">
                 <Badge className={`${statusColors[task.status]} border-0 text-[11px]`}>

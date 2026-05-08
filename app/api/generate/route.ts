@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { marked } from "marked"
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
+
 export async function POST(req: Request) {
   try {
     const { prompt, taskTitle, projectName } = await req.json();
@@ -24,7 +25,7 @@ export async function POST(req: Request) {
   } catch (error) {
     console.error(error);
     return NextResponse.json(
-      { error: "Failed to generate content" },
+      { error: error instanceof Error ? error.message : "An unknown error occurred" },
       { status: 500 },
     );
   }
